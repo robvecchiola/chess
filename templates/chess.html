@@ -1,33 +1,22 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Rob's Chess</title>
-    <link rel="icon" type="image/png" href="{{ url_for('static', filename='favicon.png') }}">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/chessboard.js/1.0.0/css/chessboard.min.css" />
-    <style>
-        #board {
-            width: 400px;
-            margin: 20px auto;
-        }
-    </style>
+    <title>Tob's Chess</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/chessboard-1.0.0.min.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="shortcut icon" href="{{ url_for('static', filename='favicon.png') }}" type="image/x-icon">
 </head>
 <body>
-    <h1 style="text-align:center;">Rob's Chess</h1>
+    <h1>Rob's Chess</h1>
+    <div id="game-status">White's turn</div>
     <div id="board"></div>
+    <button id="reset-btn">New Game</button>
 
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/chessboard-1.0.0.min.css') }}">
+    <!-- jQuery -->
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <!-- chessboard.js -->
     <script src="{{ url_for('static', filename='js/chessboard-1.0.0.min.js') }}"></script>
-
-
-    <script>
-        $(document).ready(function() {
-            var board = Chessboard('board', {
-                draggable: true,
-                position: 'start',
-                pieceTheme: '/static/images/chesspieces/wikipedia/{piece}.png'
-            });
-        });
-    </script>
+    <!-- Board initialization -->
+    <script src="{{ url_for('static', filename='js/chessboard-init.js') }}"></script>
 </body>
 </html>
