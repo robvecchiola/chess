@@ -52,7 +52,8 @@ def register_routes(app):
                     captured_piece = board.piece_at(move.to_square)
 
                 if captured_piece:
-                    color_key = "white" if captured_piece.color == chess.WHITE else "black"
+                    # Store by capturing player: white piece captured → black captured it
+                    color_key = "black" if captured_piece.color == chess.WHITE else "white"
                     captured_pieces[color_key].append(captured_piece.symbol())
                     print("Player captured:", captured_piece.symbol())
 
@@ -73,7 +74,8 @@ def register_routes(app):
                         captured_piece = board.piece_at(ai_move.to_square)
 
                     if captured_piece:
-                        color_key = "white" if captured_piece.color == chess.WHITE else "black"
+                        # Store by capturing player: white piece captured → black captured it
+                        color_key = "black" if captured_piece.color == chess.WHITE else "white"
                         captured_pieces[color_key].append(captured_piece.symbol())
                         print("AI captured:", captured_piece.symbol())
 
