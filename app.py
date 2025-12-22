@@ -1,22 +1,20 @@
 from flask import Flask
-from config import DevelopmentConfig, ProductionConfig
+from flask_session import Session
+from config import DevelopmentConfig
 from routes import register_routes
 
 app = Flask(__name__)
 
-# Choose the appropriate configuration
-# For normal development:
+# Load configuration
 app.config.from_object(DevelopmentConfig)
+
+# 🔑 Required for sessions
 app.secret_key = app.config['SECRET_KEY']
-print("SECRET_KEY:", app.config.get("SECRET_KEY"))
 
-# For testing (optional override):
-# app.config.from_object(TestingConfig)
+# Initialize Flask-Session
+Session(app)
 
-# For production:
-# app.config.from_object(ProductionConfig)
-
-# Register your routes
+# Register routes AFTER session setup
 register_routes(app)
 
 if __name__ == "__main__":
