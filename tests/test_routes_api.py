@@ -48,15 +48,20 @@ def test_illegal_move(client):
 def test_promotion(client):
     app.config['AI_ENABLED'] = False
     reset_board(client)
-    # Move a white pawn to promotion square
-    moves = [("h2", "h4"), ("a7", "a6"), ("h4", "h5"), ("a6", "a5"), ("h5", "h6"), ("a5", "a4"), ("h6", "h7"), ("a4", "a3")]
+    # Simple promotion: clear a path with the a-pawn
+    moves = [
+        ("a2", "a4"), ("h7", "h6"),
+        ("a4", "a5"), ("h6", "h5"),
+        ("a5", "a6"), ("h5", "h4"),
+        ("a6", "b7"), ("h4", "h3"),  # white captures b7 pawn
+    ]
     for from_sq, to_sq in moves:
         make_move(client, from_sq, to_sq)
-    # Now promote pawn to queen
-    rv = make_move(client, "h7", "h8", promotion="q")
+    # Now promote pawn to queen (capturing the a8 rook)
+    rv = make_move(client, "b7", "a8", promotion="q")
     assert rv["status"] == "ok"
     board = chess.Board(rv["fen"])
-    piece = board.piece_at(chess.H8)
+    piece = board.piece_at(chess.A8)
     assert piece.symbol().upper() == "Q"
 
 def test_capture(client):
