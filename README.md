@@ -9,3 +9,4 @@ venv\Scripts\activate
 
 - run venv, install libraries, then freeze requirements:
 pip freeze > requirements.txt
+pip install -r requirements.txt
