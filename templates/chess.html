@@ -12,15 +12,15 @@
     <div id="game-info">
         <div id="game-status">White's turn</div>
         <div id="captured-pieces">
-            <div>White captured: <span id="white-captured"></span></div>
-            <div>Black captured: <span id="black-captured"></span></div>
+            <div>White's captured: <span id="white-captured"></span></div>
+            <div>Black's captured: <span id="black-captured"></span></div>
         </div>
         <div>Move history:</div>
         <ol id="move-history"></ol>
-        <button id="reset-btn">New Game</button>
     </div>
 
     <div id="board"></div>
+    <button id="reset-btn">New Game</button>
 
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script src="{{ url_for('static', filename='js/chessboard-1.0.0.min.js') }}"></script>
