@@ -259,6 +259,7 @@ def test_castling_after_rook_moved(client):
 # Black Castling Tests
 # -------------------------------------------------------------------
 
+# CRITICAL FIX 2: Fix black castling tests to avoid illegal white castling
 def test_kingside_castling_black(client):
     app.config['AI_ENABLED'] = False
     reset_board(client)
@@ -269,9 +270,10 @@ def test_kingside_castling_black(client):
     make_move(client, "g8", "f6")
     make_move(client, "f1", "e2")
     make_move(client, "f8", "e7")
-    make_move(client, "e1", "f1")  # Move white king out of way
-    make_move(client, "e8", "g8")  # Black castles kingside
-    rv = make_move(client, "f1", "e1")  # Dummy move to refresh
+    # White makes a normal move (not castling)
+    make_move(client, "d2", "d3")  # Changed from king move
+    # Black castles kingside
+    rv = make_move(client, "e8", "g8")
     assert rv["status"] == "ok"
     board = chess.Board(rv["fen"])
     assert board.piece_at(chess.G8).symbol() == "k"
@@ -289,9 +291,10 @@ def test_queenside_castling_black(client):
     make_move(client, "c8", "f5")
     make_move(client, "d1", "d2")
     make_move(client, "d8", "d7")
-    make_move(client, "e1", "d1")  # Move white king out of way
-    make_move(client, "e8", "c8")  # Black castles queenside
-    rv = make_move(client, "d1", "e1")  # Dummy move to refresh
+    # White makes a normal move (not castling)
+    make_move(client, "e2", "e3")  # Changed from king move
+    # Black castles queenside
+    rv = make_move(client, "e8", "c8")
     assert rv["status"] == "ok"
     board = chess.Board(rv["fen"])
     assert board.piece_at(chess.C8).symbol() == "k"
@@ -555,6 +558,13 @@ def test_malformed_json(client):
     reset_board(client)
     rv = client.post("/move", data="{invalid json}", content_type="application/json")
     assert rv.status_code in [400, 500]  # Should handle gracefully
+
+def test_malformed_json_specific_error(client):
+    """Test malformed JSON returns proper 400 error"""
+    app.config['AI_ENABLED'] = False
+    reset_board(client)
+    rv = client.post("/move", data="{invalid json}", content_type="application/json")
+    assert rv.status_code == 400  # Should be 400, not 500
 
 def test_missing_from_field(client):
     app.config['AI_ENABLED'] = False
@@ -867,3 +877,112 @@ def test_long_game_move_history(client):
     assert rv["move_history"][-3] == "Nf6"
     assert rv["move_history"][-2] == "Ng1"
     assert rv["move_history"][-1] == "Ng8"
+
+# NEW TESTS TO ADD
+
+def test_move_from_empty_square(client):
+    """Test trying to move from empty square"""
+    app.config['AI_ENABLED'] = False
+    reset_board(client)
+    rv = make_move(client, "e4", "e5")  # e4 is empty
+    assert rv["status"] == "illegal"
+
+def test_move_opponent_piece_explicitly(client):
+    """Test white trying to move black piece explicitly"""
+    app.config['AI_ENABLED'] = False
+    reset_board(client)
+    # It's white's turn, try to move black pawn
+    rv = make_move(client, "e7", "e6")
+    assert rv["status"] == "illegal"
+
+def test_capture_own_piece(client):
+    """Test trying to capture your own piece"""
+    app.config['AI_ENABLED'] = False
+    reset_board(client)
+    # Try to move white pawn to capture white knight
+    rv = make_move(client, "e2", "g1")
+    assert rv["status"] == "illegal"
+
+def test_fifty_move_rule_resets_on_pawn_move(client):
+    """Verify fifty-move counter resets correctly"""
+    app.config['AI_ENABLED'] = False
+    reset_board(client)
+    
+    # Make 49 moves without pawn or capture
+    for i in range(24):
+        make_move(client, "g1", "f3")
+        make_move(client, "g8", "f6")
+        make_move(client, "f3", "g1")
+        make_move(client, "f6", "g8")
+    
+    # One more knight move pair (98 moves total)
+    make_move(client, "g1", "f3")
+    rv = make_move(client, "g8", "f6")
+    assert rv["fifty_moves"] == False  # Not yet 100 half-moves
+    
+    # Now make pawn move - should reset counter
+    make_move(client, "e2", "e4")
+    make_move(client, "f6", "g8")
+    
+    # Make 49 more moves
+    for i in range(24):
+        make_move(client, "f3", "g1")
+        make_move(client, "g8", "f6")
+        make_move(client, "g1", "f3")
+        make_move(client, "f6", "g8")
+    
+    rv = make_move(client, "f3", "g1")
+    # Should not trigger fifty-move because pawn move reset it
+    assert rv["fifty_moves"] == False
+
+def test_captured_pieces_symbol_case(client):
+    """Verify captured pieces use correct case"""
+    app.config['AI_ENABLED'] = False
+    reset_board(client)
+    
+    # White captures black pawn
+    make_move(client, "e2", "e4")
+    make_move(client, "d7", "d5")
+    rv = make_move(client, "e4", "d5")
+    
+    # Black pawn is lowercase 'p'
+    assert 'p' in rv["captured_pieces"]["white"]
+    assert 'P' not in rv["captured_pieces"]["white"]
+
+def test_very_long_game_performance(client):
+    """Test game with 200+ moves doesn't degrade"""
+    app.config['AI_ENABLED'] = False
+    reset_board(client)
+    
+    # Make 100 move pairs (200 half-moves)
+    for i in range(100):
+        rv1 = make_move(client, "g1", "f3")
+        assert rv1["status"] == "ok", f"Failed at move {i*2}"
+        rv2 = make_move(client, "g8", "f6")
+        assert rv2["status"] == "ok", f"Failed at move {i*2+1}"
+        rv3 = make_move(client, "f3", "g1")
+        assert rv3["status"] == "ok"
+        rv4 = make_move(client, "f6", "g8")
+        assert rv4["status"] == "ok"
+    
+    # Verify move history is complete
+    assert len(rv4["move_history"]) == 400
+
+def test_algebraic_disambiguation(client):
+    """Test SAN notation disambiguates pieces correctly"""
+    app.config['AI_ENABLED'] = False
+    reset_board(client)
+    
+    # Set up position with two knights that can move to same square
+    with client.session_transaction() as sess:
+        # Knights on b1 and f3, both can move to d2 (d2 pawn removed)
+        sess['fen'] = 'rnbqkbnr/pppppppp/8/8/8/5N2/PPP1PPPP/RN1QKB1R w KQkq - 0 1'
+        sess['move_history'] = []
+        sess['captured_pieces'] = {'white': [], 'black': []}
+        sess['special_moves'] = []
+    
+    # Move knight from b1 to d2 (both knights can reach d2, so should disambiguate)
+    rv = make_move(client, "b1", "d2")
+    assert rv["status"] == "ok"
+    # Should be "Nbd2" (file disambiguation) not just "Nd2"
+    assert rv["move_history"][-1] == "Nbd2"
