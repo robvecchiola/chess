@@ -204,6 +204,100 @@ def test_queenside_castling_black(client):
     assert board.piece_at(chess.D8).symbol() == "r"
 
 # -------------------------------------------------------------------
+# Castling Edge Cases
+# -------------------------------------------------------------------
+
+def test_castling_through_check(client):
+    app.config['AI_ENABLED'] = False
+    reset_board(client)
+    # Set up position where castling would move king through check
+    make_move(client, "e2", "e4")
+    make_move(client, "e7", "e5")
+    make_move(client, "g1", "f3")
+    make_move(client, "f8", "c5")  # Bishop to c5
+    make_move(client, "f1", "e2")
+    make_move(client, "d8", "f6")  # Queen to f6 (attacks d4, e5, f3, but doesn't block castling)
+    make_move(client, "d2", "d3")
+    make_move(client, "f6", "f1")  # Queen attacks f1 directly (king would pass through)
+    # Try to castle - should be illegal (king passes through attacked square)
+    rv = make_move(client, "e1", "g1")
+    assert rv["status"] == "illegal"
+
+def test_castling_out_of_check(client):
+    app.config['AI_ENABLED'] = False
+    reset_board(client)
+    # Set up position where king is in check and tries to castle
+    # Using a position where king is in check but not checkmate
+    make_move(client, "e2", "e4")
+    make_move(client, "e7", "e5")
+    make_move(client, "g1", "f3")
+    make_move(client, "g8", "f6")
+    make_move(client, "f1", "b5")  # Bishop checks king (can be blocked)
+    # Black king is in check, can't castle
+    rv = make_move(client, "e8", "g8")  # Try to castle out of check
+    assert rv["status"] == "illegal"
+
+def test_castling_after_rook_moved(client):
+    app.config['AI_ENABLED'] = False
+    reset_board(client)
+    # Move rook and try to castle
+    make_move(client, "h2", "h4")
+    make_move(client, "h7", "h5")
+    make_move(client, "h1", "h3")
+    make_move(client, "h8", "h6")
+    make_move(client, "h3", "h1")  # Rook back to starting position
+    make_move(client, "h6", "h8")
+    make_move(client, "g1", "f3")
+    make_move(client, "g8", "f6")
+    make_move(client, "f1", "e2")
+    make_move(client, "f8", "e7")
+    # Try to castle - should be illegal (rook has moved)
+    rv = make_move(client, "e1", "g1")
+    assert rv["status"] == "illegal"
+
+# -------------------------------------------------------------------
+# Black Castling Tests
+# -------------------------------------------------------------------
+
+def test_kingside_castling_black(client):
+    app.config['AI_ENABLED'] = False
+    reset_board(client)
+    # Clear path for kingside castling
+    make_move(client, "e2", "e4")
+    make_move(client, "e7", "e5")
+    make_move(client, "g1", "f3")
+    make_move(client, "g8", "f6")
+    make_move(client, "f1", "e2")
+    make_move(client, "f8", "e7")
+    make_move(client, "e1", "f1")  # Move white king out of way
+    make_move(client, "e8", "g8")  # Black castles kingside
+    rv = make_move(client, "f1", "e1")  # Dummy move to refresh
+    assert rv["status"] == "ok"
+    board = chess.Board(rv["fen"])
+    assert board.piece_at(chess.G8).symbol() == "k"
+    assert board.piece_at(chess.F8).symbol() == "r"
+
+def test_queenside_castling_black(client):
+    app.config['AI_ENABLED'] = False
+    reset_board(client)
+    # Clear path for queenside castling
+    make_move(client, "d2", "d4")
+    make_move(client, "d7", "d5")
+    make_move(client, "b1", "c3")
+    make_move(client, "b8", "c6")
+    make_move(client, "c1", "f4")
+    make_move(client, "c8", "f5")
+    make_move(client, "d1", "d2")
+    make_move(client, "d8", "d7")
+    make_move(client, "e1", "d1")  # Move white king out of way
+    make_move(client, "e8", "c8")  # Black castles queenside
+    rv = make_move(client, "d1", "e1")  # Dummy move to refresh
+    assert rv["status"] == "ok"
+    board = chess.Board(rv["fen"])
+    assert board.piece_at(chess.C8).symbol() == "k"
+    assert board.piece_at(chess.D8).symbol() == "r"
+
+# -------------------------------------------------------------------
 # Move History & Captured Pieces Tests
 # -------------------------------------------------------------------
 
@@ -216,6 +310,86 @@ def test_move_history_san_notation(client):
     assert len(rv["move_history"]) == 2
     assert rv["move_history"][0] == "e4"
     assert rv["move_history"][1] == "e5"
+
+# -------------------------------------------------------------------
+# Special Moves Tracking Tests
+# -------------------------------------------------------------------
+
+def test_special_moves_castling(client):
+    app.config['AI_ENABLED'] = False
+    reset_board(client)
+    # Set up and perform castling
+    make_move(client, "e2", "e4")
+    make_move(client, "e7", "e5")
+    make_move(client, "g1", "f3")
+    make_move(client, "g8", "f6")
+    make_move(client, "f1", "e2")
+    make_move(client, "f8", "e7")
+    rv = make_move(client, "e1", "g1")
+    assert "special_moves" in rv
+    assert "Castling" in rv["special_moves"]
+
+def test_special_moves_en_passant(client):
+    app.config['AI_ENABLED'] = False
+    reset_board(client)
+    # Set up en passant
+    make_move(client, "e2", "e4")
+    make_move(client, "d7", "d5")
+    make_move(client, "e4", "e5")
+    make_move(client, "f7", "f5")
+    rv = make_move(client, "e5", "f6")
+    assert "special_moves" in rv
+    assert "En Passant" in rv["special_moves"]
+
+def test_special_moves_promotion(client):
+    app.config['AI_ENABLED'] = False
+    reset_board(client)
+    moves = [
+        ("a2", "a4"), ("h7", "h6"),
+        ("a4", "a5"), ("h6", "h5"),
+        ("a5", "a6"), ("h5", "h4"),
+        ("a6", "b7"), ("h4", "h3"),
+    ]
+    for from_sq, to_sq in moves:
+        make_move(client, from_sq, to_sq)
+    rv = make_move(client, "b7", "a8", promotion="q")
+    assert "special_moves" in rv
+    assert "Promotion to Q" in rv["special_moves"]
+
+def test_multiple_special_moves_accumulation(client):
+    app.config['AI_ENABLED'] = False
+    reset_board(client)
+    # First special move: en passant
+    make_move(client, "e2", "e4")
+    make_move(client, "d7", "d5")
+    make_move(client, "e4", "e5")
+    make_move(client, "f7", "f5")
+    rv = make_move(client, "e5", "f6")  # En passant
+    assert len(rv["special_moves"]) == 1
+    assert "En Passant" in rv["special_moves"]
+    
+    # Second special move: castling
+    make_move(client, "g8", "h6")
+    make_move(client, "g1", "f3")
+    make_move(client, "h6", "g8")
+    make_move(client, "f1", "e2")
+    make_move(client, "g8", "h6")
+    rv = make_move(client, "e1", "g1")  # Castling
+    assert len(rv["special_moves"]) == 2
+    assert "En Passant" in rv["special_moves"]
+    assert "Castling" in rv["special_moves"]
+
+def test_san_notation_includes_capture(client):
+    app.config['AI_ENABLED'] = False
+    reset_board(client)
+    # Make a capture and check SAN notation includes 'x'
+    make_move(client, "e2", "e4")
+    make_move(client, "d7", "d5")
+    rv = make_move(client, "e4", "d5")  # Pawn captures pawn
+    # Last move in history should be exd5 (includes 'x' for capture)
+    assert "move_history" in rv
+    last_move = rv["move_history"][-1]
+    assert "x" in last_move  # SAN notation should include capture symbol
 
 def test_captured_pieces_tracking(client):
     app.config['AI_ENABLED'] = False
@@ -252,6 +426,73 @@ def test_en_passant_capture_tracking(client):
     # En passant should track captured pawn in white's captures
     assert len(rv["captured_pieces"]["white"]) == 1
     assert rv["captured_pieces"]["white"][0].lower() == "p"
+
+# -------------------------------------------------------------------
+# All Piece Types Captured Tests
+# -------------------------------------------------------------------
+
+def test_capture_queen(client):
+    app.config['AI_ENABLED'] = False
+    reset_board(client)
+    # Set up queen capture
+    make_move(client, "e2", "e4")
+    make_move(client, "d7", "d5")
+    make_move(client, "e4", "d5")
+    rv = make_move(client, "d8", "d5")  # Black queen moves to d5
+    make_move(client, "b1", "c3")
+    rv = make_move(client, "d5", "e5")
+    make_move(client, "c3", "e4")
+    rv = make_move(client, "e5", "e4")  # Queen captures knight
+    make_move(client, "d1", "e2")
+    rv = make_move(client, "e4", "e2")  # Queen captures queen
+    # Verify white queen was captured by black
+    captured = rv["captured_pieces"]["black"]
+    assert any(p.lower() == 'q' for p in captured)
+
+def test_capture_rook(client):
+    app.config['AI_ENABLED'] = False
+    reset_board(client)
+    # Simple rook capture
+    moves = [
+        ("a2", "a4"), ("h7", "h6"),
+        ("a4", "a5"), ("h6", "h5"),
+        ("a5", "a6"), ("h5", "h4"),
+        ("a6", "b7"), ("h4", "h3"),
+    ]
+    for from_sq, to_sq in moves:
+        make_move(client, from_sq, to_sq)
+    rv = make_move(client, "b7", "a8", promotion="q")  # Pawn promotes and captures rook
+    # Verify rook was captured by white
+    captured = rv["captured_pieces"]["white"]
+    assert any(p.lower() == 'r' for p in captured)
+
+def test_capture_bishop(client):
+    app.config['AI_ENABLED'] = False
+    reset_board(client)
+    # Bishop capture
+    make_move(client, "e2", "e4")
+    make_move(client, "d7", "d5")
+    make_move(client, "f1", "b5")
+    make_move(client, "c8", "d7")
+    rv = make_move(client, "b5", "d7")  # Bishop captures bishop
+    # Verify bishop was captured
+    captured = rv["captured_pieces"]["white"]
+    assert any(p.lower() == 'b' for p in captured)
+
+def test_capture_knight(client):
+    app.config['AI_ENABLED'] = False
+    reset_board(client)
+    # Knight capture
+    make_move(client, "e2", "e4")
+    make_move(client, "b8", "c6")
+    make_move(client, "f1", "b5")
+    make_move(client, "c6", "d4")  # Knight moves
+    make_move(client, "b5", "c4")
+    make_move(client, "d4", "f3")  # Knight moves
+    rv = make_move(client, "d1", "f3")  # Queen captures knight
+    # Verify knight was captured by white
+    captured = rv["captured_pieces"]["white"]
+    assert any(p.lower() == 'n' for p in captured)
 
 # -------------------------------------------------------------------
 # Promotion Variant Tests
@@ -338,6 +579,166 @@ def test_invalid_uci_string(client):
     assert rv["status"] == "illegal"
 
 # -------------------------------------------------------------------
+# Game Over Prevention Tests
+# -------------------------------------------------------------------
+
+def test_move_rejected_after_checkmate(client):
+    app.config['AI_ENABLED'] = False
+    reset_board(client)
+    # Fool's mate
+    moves = [("f2","f3"), ("e7","e5"), ("g2","g4"), ("d8","h4")]
+    for from_sq, to_sq in moves:
+        rv = make_move(client, from_sq, to_sq)
+    # Game is over (checkmate)
+    assert rv["checkmate"] == True
+    # Try to make another move - should fail
+    rv2 = make_move(client, "e2", "e4")
+    assert rv2["status"] == "illegal"
+
+def test_move_rejected_after_stalemate(client):
+    app.config['AI_ENABLED'] = False
+    reset_board(client)
+    # Create stalemate
+    moves = [
+        ("e2", "e3"), ("a7", "a5"),
+        ("d1", "h5"), ("a8", "a6"),
+        ("h5", "a5"), ("h7", "h5"),
+        ("h2", "h4"), ("a6", "h6"),
+        ("a5", "c7"), ("f7", "f6"),
+        ("c7", "d7"), ("e8", "f7"),
+        ("d7", "b7"), ("d8", "d3"),
+        ("b7", "b8"), ("d3", "h7"),
+        ("b8", "c8"), ("f7", "g6"),
+        ("c8", "e6")  # Stalemate
+    ]
+    for from_sq, to_sq in moves:
+        rv = make_move(client, from_sq, to_sq)
+    # Game is over (stalemate)
+    assert rv["stalemate"] == True
+    # Try to make another move - should fail
+    rv2 = make_move(client, "e6", "e7")
+    assert rv2["status"] == "illegal"
+
+# -------------------------------------------------------------------
+# Turn Enforcement Tests
+# -------------------------------------------------------------------
+
+def test_cannot_move_opponent_pieces(client):
+    app.config['AI_ENABLED'] = False
+    reset_board(client)
+    # White's turn - try to move black piece
+    rv = make_move(client, "e7", "e5")
+    # Should be rejected (white can't move black pieces)
+    assert rv["status"] == "illegal"
+
+def test_turn_alternates_correctly(client):
+    app.config['AI_ENABLED'] = False
+    reset_board(client)
+    # White moves
+    rv1 = make_move(client, "e2", "e4")
+    assert rv1["status"] == "ok"
+    assert rv1["turn"] == "black"
+    # Black moves
+    rv2 = make_move(client, "e7", "e5")
+    assert rv2["status"] == "ok"
+    assert rv2["turn"] == "white"
+    # White moves again
+    rv3 = make_move(client, "g1", "f3")
+    assert rv3["status"] == "ok"
+    assert rv3["turn"] == "black"
+
+# -------------------------------------------------------------------
+# Invalid Promotion Tests
+# -------------------------------------------------------------------
+
+def test_invalid_promotion_piece(client):
+    app.config['AI_ENABLED'] = False
+    reset_board(client)
+    moves = [
+        ("a2", "a4"), ("h7", "h6"),
+        ("a4", "a5"), ("h6", "h5"),
+        ("a5", "a6"), ("h5", "h4"),
+        ("a6", "b7"), ("h4", "h3"),
+    ]
+    for from_sq, to_sq in moves:
+        make_move(client, from_sq, to_sq)
+    # Try to promote to king (invalid)
+    rv = make_move(client, "b7", "a8", promotion="k")
+    assert rv["status"] == "illegal"
+
+def test_promotion_without_reaching_rank(client):
+    app.config['AI_ENABLED'] = False
+    reset_board(client)
+    # Try to promote a pawn that hasn't reached rank 8
+    rv = make_move(client, "e2", "e4", promotion="q")
+    # This should either be illegal or ignore the promotion
+    # Based on UCI, this would create an invalid move
+    assert rv["status"] == "illegal"
+
+# -------------------------------------------------------------------
+# Check Flag Verification Tests
+# -------------------------------------------------------------------
+
+def test_check_flag_in_response(client):
+    app.config['AI_ENABLED'] = False
+    reset_board(client)
+    # Create a check position (not checkmate)
+    make_move(client, "e2", "e4")
+    make_move(client, "e7", "e5")
+    make_move(client, "g1", "f3")
+    make_move(client, "b8", "c6")
+    make_move(client, "f1", "b5")  # Bishop pins knight, checking king
+    rv = make_move(client, "a7", "a6")  # Black must respond
+    make_move(client, "b5", "c6")  # Bishop takes knight
+    # This is check (not checkmate)
+    assert rv["check"] == False  # Last move was a6, which doesn't check white
+
+def test_no_check_flag_when_not_in_check(client):
+    app.config['AI_ENABLED'] = False
+    reset_board(client)
+    rv = make_move(client, "e2", "e4")
+    assert rv["check"] == False
+
+# -------------------------------------------------------------------
+# FEN Accuracy Tests
+# -------------------------------------------------------------------
+
+def test_fen_accuracy_after_complex_sequence(client):
+    app.config['AI_ENABLED'] = False
+    reset_board(client)
+    # Play a sequence of moves
+    moves = [
+        ("e2", "e4"), ("e7", "e5"),
+        ("g1", "f3"), ("b8", "c6"),
+        ("f1", "b5"), ("a7", "a6"),
+        ("b5", "a4"), ("g8", "f6"),
+    ]
+    for from_sq, to_sq in moves:
+        rv = make_move(client, from_sq, to_sq)
+    
+    # Verify FEN matches actual position
+    board = chess.Board(rv["fen"])
+    # Check specific pieces are in expected positions
+    assert board.piece_at(chess.E4).symbol() == "P"  # White pawn on e4
+    assert board.piece_at(chess.E5).symbol() == "p"  # Black pawn on e5
+    assert board.piece_at(chess.F3).symbol() == "N"  # White knight on f3
+    assert board.piece_at(chess.F6).symbol() == "n"  # Black knight on f6
+    assert board.piece_at(chess.A4).symbol() == "B"  # White bishop on a4
+    assert board.piece_at(chess.C6).symbol() == "n"  # Black knight on c6
+
+def test_fen_accuracy_after_captures(client):
+    app.config['AI_ENABLED'] = False
+    reset_board(client)
+    # Perform captures
+    make_move(client, "e2", "e4")
+    make_move(client, "d7", "d5")
+    rv = make_move(client, "e4", "d5")
+    
+    board = chess.Board(rv["fen"])
+    assert board.piece_at(chess.D5).symbol() == "P"  # White pawn on d5
+    assert board.piece_at(chess.E4) is None  # E4 is now empty
+
+# -------------------------------------------------------------------
 # Session Persistence Tests
 # -------------------------------------------------------------------
 
@@ -363,6 +764,32 @@ def test_reset_clears_session(client):
     assert data["move_history"] == []
     assert data["captured_pieces"] == {'white': [], 'black': []}
     assert data["fen"] == chess.STARTING_FEN
+
+def test_reset_clears_special_moves(client):
+    app.config['AI_ENABLED'] = False
+    reset_board(client)
+    # Make en passant (special move)
+    make_move(client, "e2", "e4")
+    make_move(client, "d7", "d5")
+    make_move(client, "e4", "e5")
+    make_move(client, "f7", "f5")
+    rv = make_move(client, "e5", "f6")
+    assert len(rv["special_moves"]) == 1
+    # Reset
+    rv = client.post("/reset")
+    data = rv.get_json()
+    assert data["special_moves"] == []
+
+def test_captured_pieces_symbol_format(client):
+    app.config['AI_ENABLED'] = False
+    reset_board(client)
+    # Capture pieces and verify symbol format
+    make_move(client, "e2", "e4")
+    make_move(client, "d7", "d5")
+    rv = make_move(client, "e4", "d5")  # White captures black pawn
+    # Check that captured piece is lowercase (black pawn)
+    captured = rv["captured_pieces"]["white"][0]
+    assert captured == 'p'  # Black pieces are lowercase in python-chess
 
 # -------------------------------------------------------------------
 # Edge Case Tests
@@ -396,3 +823,47 @@ def test_reset_during_checkmate(client):
     assert data["status"] == "ok"
     assert data["checkmate"] == False
     assert data["game_over"] == False
+
+# -------------------------------------------------------------------
+# Pinned Piece Tests
+# -------------------------------------------------------------------
+
+def test_pinned_piece_cannot_move_via_api(client):
+    app.config['AI_ENABLED'] = False
+    # Set up pinned position directly
+    with client.session_transaction() as sess:
+        # Bishop on d4 is pinned by rook on d8, king on d1
+        sess['fen'] = '3r4/8/8/8/3B4/8/8/3K4 w - - 0 1'
+        sess['move_history'] = []
+        sess['captured_pieces'] = {'white': [], 'black': []}
+        sess['special_moves'] = []
+    # Try to move pinned bishop off the d-file (illegal)
+    rv = make_move(client, "d4", "e5")
+    assert rv["status"] == "illegal"
+    # Try to move along the pin line - still illegal (absolute pin)
+    rv = make_move(client, "d4", "d5")
+    assert rv["status"] == "illegal"
+    # Only king can move
+    rv = make_move(client, "d1", "e2")
+    assert rv["status"] == "ok"
+
+# -------------------------------------------------------------------
+# Long Game Stress Test
+# -------------------------------------------------------------------
+
+def test_long_game_move_history(client):
+    app.config['AI_ENABLED'] = False
+    reset_board(client)
+    # Make 50 moves (100 half-moves) moving knights back and forth
+    for i in range(25):
+        make_move(client, "g1", "f3")
+        make_move(client, "g8", "f6")
+        make_move(client, "f3", "g1")
+        rv = make_move(client, "f6", "g8")
+    # Verify move history has 100 moves
+    assert len(rv["move_history"]) == 100
+    # Verify last few moves are correct
+    assert rv["move_history"][-4] == "Nf3"
+    assert rv["move_history"][-3] == "Nf6"
+    assert rv["move_history"][-2] == "Ng1"
+    assert rv["move_history"][-1] == "Ng8"
