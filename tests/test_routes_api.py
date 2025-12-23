@@ -162,6 +162,48 @@ def test_castling_after_king_moved(client):
     assert rv["status"] == "illegal"
 
 # -------------------------------------------------------------------
+# Black Castling Tests
+# -------------------------------------------------------------------
+
+def test_kingside_castling_black(client):
+    app.config['AI_ENABLED'] = False
+    reset_board(client)
+    # Clear path for kingside castling
+    make_move(client, "e2", "e4")
+    make_move(client, "e7", "e5")
+    make_move(client, "g1", "f3")
+    make_move(client, "g8", "f6")
+    make_move(client, "f1", "e2")
+    make_move(client, "f8", "e7")
+    make_move(client, "e1", "f1")  # Move white king out of way
+    make_move(client, "e8", "g8")  # Black castles kingside
+    rv = make_move(client, "f1", "e1")  # Dummy move to refresh
+    assert rv["status"] == "ok"
+    board = chess.Board(rv["fen"])
+    assert board.piece_at(chess.G8).symbol() == "k"
+    assert board.piece_at(chess.F8).symbol() == "r"
+
+def test_queenside_castling_black(client):
+    app.config['AI_ENABLED'] = False
+    reset_board(client)
+    # Clear path for queenside castling
+    make_move(client, "d2", "d4")
+    make_move(client, "d7", "d5")
+    make_move(client, "b1", "c3")
+    make_move(client, "b8", "c6")
+    make_move(client, "c1", "f4")
+    make_move(client, "c8", "f5")
+    make_move(client, "d1", "d2")
+    make_move(client, "d8", "d7")
+    make_move(client, "e1", "d1")  # Move white king out of way
+    make_move(client, "e8", "c8")  # Black castles queenside
+    rv = make_move(client, "d1", "e1")  # Dummy move to refresh
+    assert rv["status"] == "ok"
+    board = chess.Board(rv["fen"])
+    assert board.piece_at(chess.C8).symbol() == "k"
+    assert board.piece_at(chess.D8).symbol() == "r"
+
+# -------------------------------------------------------------------
 # Move History & Captured Pieces Tests
 # -------------------------------------------------------------------
 

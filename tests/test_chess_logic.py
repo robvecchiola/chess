@@ -39,3 +39,48 @@ def test_en_passant(new_board):
     assert move in new_board.legal_moves
     new_board.push(move)
     assert new_board.piece_at(chess.B6).symbol() == "P"
+
+def test_knight_moves(new_board):
+    # Place knight on d4
+    new_board.set_fen("8/8/8/8/3N4/8/8/8 w - - 0 1")
+    # Test some knight moves
+    moves = ["d4c2", "d4e2", "d4b3", "d4f3", "d4b5", "d4f5", "d4c6", "d4e6"]
+    for uci in moves:
+        move = chess.Move.from_uci(uci)
+        assert move in new_board.legal_moves
+
+def test_bishop_moves(new_board):
+    # Place bishop on d4
+    new_board.set_fen("8/8/8/8/3B4/8/8/8 w - - 0 1")
+    # Test diagonal moves
+    moves = ["d4c3", "d4e3", "d4c5", "d4e5", "d4b2", "d4f2", "d4b6", "d4f6", "d4a1", "d4g1", "d4a7", "d4g7", "d4h8"]
+    for uci in moves:
+        move = chess.Move.from_uci(uci)
+        assert move in new_board.legal_moves
+
+def test_rook_moves(new_board):
+    # Place rook on d4
+    new_board.set_fen("8/8/8/8/3R4/8/8/8 w - - 0 1")
+    # Test horizontal/vertical moves
+    moves = ["d4d1", "d4d2", "d4d3", "d4d5", "d4d6", "d4d7", "d4d8", "d4a4", "d4b4", "d4c4", "d4e4", "d4f4", "d4g4", "d4h4"]
+    for uci in moves:
+        move = chess.Move.from_uci(uci)
+        assert move in new_board.legal_moves
+
+def test_queen_moves(new_board):
+    # Place queen on d4
+    new_board.set_fen("8/8/8/8/3Q4/8/8/8 w - - 0 1")
+    # Test combined rook/bishop moves
+    moves = ["d4d1", "d4d8", "d4a4", "d4h4", "d4c3", "d4e5", "d4c5", "d4e3", "d4b6", "d4f6", "d4b2", "d4f2", "d4a7", "d4g7", "d4a1", "d4g1", "d4h8"]
+    for uci in moves:
+        move = chess.Move.from_uci(uci)
+        assert move in new_board.legal_moves
+
+def test_king_moves(new_board):
+    # Place king on d4
+    new_board.set_fen("8/8/8/8/3K4/8/8/8 w - - 0 1")
+    # Test one-square moves
+    moves = ["d4c3", "d4c4", "d4c5", "d4d3", "d4d5", "d4e3", "d4e4", "d4e5"]
+    for uci in moves:
+        move = chess.Move.from_uci(uci)
+        assert move in new_board.legal_moves

@@ -14,8 +14,13 @@ def get_game_state():
     if 'fen' not in session or session['fen'] is None:
         init_game()
 
-    board = chess.Board(session['fen'])
+    board = chess.Board()
     move_history = session.get('move_history', [])
+    if move_history:
+        for san in move_history:
+            board.push_san(san)
+    else:
+        board = chess.Board(session['fen'])
     captured_pieces = session.get('captured_pieces', {'white': [], 'black': []})
 
     return board, move_history, captured_pieces

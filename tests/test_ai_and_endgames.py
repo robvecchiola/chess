@@ -100,3 +100,60 @@ def test_ai_stops_on_checkmate(client):
         make_move(client, from_sq, to_sq)
     # After this, game might be over
     # The test verifies AI behavior is correct
+
+def test_threefold_repetition_draw(client):
+    app.config['AI_ENABLED'] = False
+    reset_board(client)
+    # Create a position that can be repeated
+    # Simple repetition: knights moving back and forth
+    moves = [
+        ("g1", "f3"), ("g8", "f6"),  # Position A first time
+        ("f3", "g1"), ("f6", "g8"),  # Back to start
+        ("g1", "f3"), ("g8", "f6"),  # Position A second time
+        ("f3", "g1"), ("f6", "g8"),  # Back to start
+        ("g1", "f3"), ("g8", "f6"),  # Position A third time
+    ]
+    for from_sq, to_sq in moves:
+        rv = make_move(client, from_sq, to_sq)
+    assert rv["repetition"] == True
+
+def test_fifty_move_draw(client):
+    app.config['AI_ENABLED'] = False
+    reset_board(client)
+    # Make 100 half-moves without capture or pawn move
+    # Use knights to move back and forth
+    moves = []
+    for i in range(50):  # 100 half-moves
+        if i % 2 == 0:
+            moves.append(("g1", "f3"))
+            moves.append(("g8", "f6"))
+        else:
+            moves.append(("f3", "g1"))
+            moves.append(("f6", "g8"))
+    for from_sq, to_sq in moves[:100]:  # Limit to 100 moves
+        rv = make_move(client, from_sq, to_sq)
+    assert rv["fifty_moves"] == True
+
+def test_insufficient_material_king_bishop_vs_king(client):
+    app.config['AI_ENABLED'] = False
+    # Set up king + bishop vs king
+    with client.session_transaction() as sess:
+        sess['fen'] = '8/8/8/8/8/8/5K1B/7k w - - 0 1'
+        sess['move_history'] = []
+        sess['captured_pieces'] = {'white': [], 'black': []}
+    rv = make_move(client, "f2", "f3")  # Any legal move
+    board = chess.Board(rv["fen"])
+    assert board.is_insufficient_material() == True
+    assert rv["insufficient_material"] == True
+
+def test_insufficient_material_king_knight_vs_king(client):
+    app.config['AI_ENABLED'] = False
+    # Set up king + knight vs king
+    with client.session_transaction() as sess:
+        sess['fen'] = '8/8/8/8/8/8/5K1N/7k w - - 0 1'
+        sess['move_history'] = []
+        sess['captured_pieces'] = {'white': [], 'black': []}
+    rv = make_move(client, "f2", "f3")  # Any legal move
+    board = chess.Board(rv["fen"])
+    assert board.is_insufficient_material() == True
+    assert rv["insufficient_material"] == True
