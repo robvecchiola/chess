@@ -208,3 +208,18 @@ def test_sufficient_material_two_knights(client):
     # python-chess may treat this differently
     # Just verify the flag is present
     assert "insufficient_material" in rv
+
+def test_ai_promotion_limitation(client):
+    app.config['AI_ENABLED'] = True
+    reset_board(client)
+    # Note: AI uses random.choice which doesn't handle promotion
+    # This test documents the current limitation
+    # Set up a position where AI (black) could potentially promote
+    # But since AI is random and doesn't check for promotion opportunities,
+    # we're just documenting this behavior exists
+    # In a real game, this would require many moves to set up
+    # For now, just verify AI can make moves without errors
+    rv = make_move(client, "e2", "e4")
+    assert rv["status"] == "ok"
+    # AI should have responded
+    assert len(rv["move_history"]) == 2

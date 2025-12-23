@@ -84,3 +84,26 @@ def test_king_moves(new_board):
     for uci in moves:
         move = chess.Move.from_uci(uci)
         assert move in new_board.legal_moves
+
+def test_pinned_piece_cannot_move(new_board):
+    # Bishop on d4 is pinned by rook on d8, king on d1
+    new_board.set_fen("3r4/8/8/8/3B4/8/8/3K4 w - - 0 1")
+    # The bishop is absolutely pinned - any move exposes the king
+    # Only the king can move in this position
+    illegal_moves = ["d4c3", "d4e3", "d4c5", "d4e5", "d4d2", "d4d3", "d4d5", "d4d6", "d4d7", "d4d8"]
+    for uci in illegal_moves:
+        move = chess.Move.from_uci(uci)
+        assert move not in new_board.legal_moves
+    # Only king moves are legal
+    king_moves = ["d1e2", "d1d2", "d1c2", "d1e1", "d1c1"]
+    for uci in king_moves:
+        move = chess.Move.from_uci(uci)
+        assert move in new_board.legal_moves
+
+def test_discovery_check(new_board):
+    # White rook on a1, black king on a8, white bishop on a4
+    # Moving bishop reveals check from rook
+    new_board.set_fen("k7/8/8/8/B7/8/8/R6K w - - 0 1")
+    move = chess.Move.from_uci("a4b5")  # Bishop moves, revealing check
+    new_board.push(move)
+    assert new_board.is_check() == True
