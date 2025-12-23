@@ -109,7 +109,7 @@ def evaluate_board(board):
     return score
 
 
-def quiescence(board, alpha, beta):
+def quiescence(board, alpha, beta, depth=0, max_depth=4):
     """Quiescence search to handle captures and checks"""
     stand_pat = evaluate_board(board)
     
@@ -118,11 +118,15 @@ def quiescence(board, alpha, beta):
     if alpha < stand_pat:
         alpha = stand_pat
     
+    # Limit quiescence depth to prevent infinite recursion
+    if depth >= max_depth:
+        return alpha
+    
     # Only consider captures and check evasions
     for move in board.legal_moves:
         if board.is_capture(move) or board.gives_check(move):
             board.push(move)
-            score = -quiescence(board, -beta, -alpha)
+            score = -quiescence(board, -beta, -alpha, depth + 1, max_depth)
             board.pop()
             
             if score >= beta:
@@ -133,14 +137,15 @@ def quiescence(board, alpha, beta):
     return alpha
 
 
-def minimax(board, depth, alpha, beta, maximizing):
+def minimax(board, depth, alpha, beta, maximizing_white):
+    """Minimax from white's perspective (maximizing_white=True means white's turn)"""
     if depth == 0:
         return quiescence(board, alpha, beta)
     
     if board.is_game_over():
         return evaluate_board(board)
 
-    if maximizing:
+    if maximizing_white:
         max_eval = -math.inf
         for move in board.legal_moves:
             board.push(move)
@@ -178,20 +183,33 @@ def order_moves(board):
     return captures + others
 
 
-def choose_ai_move(board, depth=3):
+def choose_ai_move(board, depth=2):
     """Choose the best move using minimax with alpha-beta pruning"""
+    # Note: depth=2 with quiescence search is roughly equivalent to depth=3-4 without it
     best_move = None
-    best_value = -math.inf
     
-    # Since AI plays as black (minimizing player), we want to minimize
-    for move in order_moves(board):
-        board.push(move)
-        # After our move, opponent maximizes
-        value = minimax(board, depth - 1, -math.inf, math.inf, True)
-        board.pop()
-        
-        if value > best_value:
-            best_value = value
-            best_move = move
+    # Determine if current player is white (maximizing) or black (minimizing)
+    if board.turn == chess.WHITE:
+        # White wants to maximize
+        best_value = -math.inf
+        for move in order_moves(board):
+            board.push(move)
+            value = minimax(board, depth - 1, -math.inf, math.inf, False)
+            board.pop()
+            
+            if value > best_value:
+                best_value = value
+                best_move = move
+    else:
+        # Black wants to minimize
+        best_value = math.inf
+        for move in order_moves(board):
+            board.push(move)
+            value = minimax(board, depth - 1, -math.inf, math.inf, True)
+            board.pop()
+            
+            if value < best_value:
+                best_value = value
+                best_move = move
     
     return best_move
