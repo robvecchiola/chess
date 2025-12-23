@@ -68,6 +68,7 @@ $(document).ready(function () {
                     currentTurn = response.turn;  // Update current turn
                     isGameOver = response.game_over;  // Update game over status
                     updateStatus(response.turn, response.check, response.checkmate, response.stalemate, response.fifty_moves, response.repetition, response.insufficient_material, response.game_over);
+                    updateSpecialMove(response.special_moves);
                     updateMoveHistory(response.move_history);
                     updateCaptured(response.captured_pieces);
 
@@ -160,6 +161,7 @@ $(document).ready(function () {
                 isGameOver = false;      // Reset game over status
                 board.start();
                 updateStatus('white', false, false, false, false, false, false, false);
+                updateSpecialMove(response.special_moves);
                 updateMoveHistory([]);
                 updateCaptured({ white: [], black: [] });
             }
@@ -177,6 +179,14 @@ $(document).ready(function () {
             if (check) status += " - Check!";
         }
         $("#game-status").text(status);
+    }
+
+    function updateSpecialMove(special_moves) {
+        if (special_moves && special_moves.length > 0) {
+            $("#special-move-status").html("Special moves:<br>" + special_moves.map(m => `• ${m}`).join("<br>"));
+        } else {
+            $("#special-move-status").text("");
+        }
     }
 
     function updateMoveHistory(history) {

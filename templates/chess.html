@@ -9,8 +9,12 @@
 <body>
     <h1>rob's Flask Chess AI</h1>
 
+    <div id="board"></div>
+    <button id="reset-btn">New Game</button>
+
     <div id="game-info">
         <div id="game-status">White's turn</div>
+        <div id="special-move-status"></div>
         <div id="captured-pieces">
             <div>White's captured: <span id="white-captured"></span></div>
             <div>Black's captured: <span id="black-captured"></span></div>
@@ -18,9 +22,6 @@
         <div>Move history:</div>
         <ol id="move-history"></ol>
     </div>
-
-    <div id="board"></div>
-    <button id="reset-btn">New Game</button>
 
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script src="{{ url_for('static', filename='js/chessboard-1.0.0.min.js') }}"></script>

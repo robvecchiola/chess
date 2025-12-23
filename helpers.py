@@ -8,6 +8,7 @@ def init_game():
     session['fen'] = chess.STARTING_FEN
     session['move_history'] = []
     session['captured_pieces'] = {'white': [], 'black': []}
+    session['special_moves'] = []
 
 
 def get_game_state():
@@ -22,11 +23,13 @@ def get_game_state():
     else:
         board = chess.Board(session['fen'])
     captured_pieces = session.get('captured_pieces', {'white': [], 'black': []})
+    special_moves = session.get('special_moves', [])
 
-    return board, move_history, captured_pieces
+    return board, move_history, captured_pieces, special_moves
 
 
-def save_game_state(board, move_history, captured_pieces):
+def save_game_state(board, move_history, captured_pieces, special_moves):
     session['fen'] = board.fen()
     session['move_history'] = move_history
     session['captured_pieces'] = captured_pieces
+    session['special_moves'] = special_moves

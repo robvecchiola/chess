@@ -20,7 +20,7 @@ def register_routes(app):
 
     @app.route("/move", methods=["POST"])
     def move():
-        board, move_history, captured_pieces = get_game_state()
+        board, move_history, captured_pieces, special_moves = get_game_state()
 
         print("\n--- DEBUG ---")
         print("Current board FEN:", board.fen())
@@ -40,7 +40,14 @@ def register_routes(app):
             if move not in board.legal_moves:
                 print("Move is illegal")
                 return jsonify({"status": "illegal", "fen": board.fen()})
-
+            # Detect special move
+            special_move = None
+            if board.is_castling(move):
+                special_move = "Castling"
+            elif board.is_en_passant(move):
+                special_move = "En Passant"
+            elif promotion:
+                special_move = f"Promotion to {promotion.upper()}"
             # SAN before push
             move_san = board.san(move)
 
@@ -60,11 +67,20 @@ def register_routes(app):
             board.push(move)
             move_history.append(move_san)
 
+            if special_move:
+                special_moves.append(special_move)
+
             # -----------------------------------------------------------
             # AI Move
             # -----------------------------------------------------------
             if app.config.get("AI_ENABLED", True) and not board.is_game_over():
                 ai_move = random.choice(list(board.legal_moves))
+                ai_special_move = None
+                if board.is_castling(ai_move):
+                    ai_special_move = "Castling"
+                elif board.is_en_passant(ai_move):
+                    ai_special_move = "En Passant"
+                # Note: AI doesn't handle promotion in this simple implementation
                 ai_san = board.san(ai_move)
 
                 if board.is_capture(ai_move):
@@ -81,15 +97,18 @@ def register_routes(app):
 
                 board.push(ai_move)
                 move_history.append(ai_san)
+                if ai_special_move:
+                    special_moves.append(ai_special_move)
 
             # Save updated session state
-            save_game_state(board, move_history, captured_pieces)
+            save_game_state(board, move_history, captured_pieces, special_moves)
 
             print("Board after moves:", board.fen())
             print("--- END DEBUG ---\n")
 
             return jsonify({
                 "status": "ok",
+                "special_moves": special_moves,
                 "fen": board.fen(),
                 "turn": "white" if board.turn == chess.WHITE else "black",
                 "check": board.is_check(),
@@ -115,6 +134,7 @@ def register_routes(app):
 
         return jsonify({
             "status": "ok",
+            "special_moves": [],
             "fen": chess.STARTING_FEN,
             "turn": "white",
             "check": False,
