@@ -52,7 +52,8 @@ $(document).ready(function () {
 
         board.draggable = false;  // Disable dragging during move
 
-        // Show AI thinking status
+        // Show "AI is thinking..." immediately since we're about to send a player move
+        // (which will trigger AI response if legal)
         updateStatus('black', false, false, false, false, false, false, false);
 
         const payload = { from: source, to: target };
@@ -85,6 +86,8 @@ $(document).ready(function () {
 
                     rollbackPosition();   // unified rollback
                     updateErrorMessage("Illegal move!");
+                    // Restore correct turn status after illegal move
+                    updateStatus(currentTurn, false, false, false, false, false, false, false);
                 }
             },
 
@@ -93,6 +96,8 @@ $(document).ready(function () {
                 rollbackPosition();
                 const errorMsg = xhr.responseJSON && xhr.responseJSON.message ? xhr.responseJSON.message : "Server error";
                 updateErrorMessage(errorMsg);
+                // Restore correct turn status after server error
+                updateStatus(currentTurn, false, false, false, false, false, false, false);
             }
         });
     }
@@ -217,5 +222,4 @@ $(document).ready(function () {
         $("#white-captured").text(captured.white.join(" "));
         $("#black-captured").text(captured.black.join(" "));
     }
-
 });
