@@ -71,11 +71,12 @@ $(document).ready(function () {
                     updateSpecialMove(response.special_moves);
                     updateMoveHistory(response.move_history);
                     updateCaptured(response.captured_pieces);
+                    updateErrorMessage("");  // Clear any previous error
 
                 } else {
 
                     rollbackPosition();   // unified rollback
-                    alert("Illegal move!");
+                    updateErrorMessage("Illegal move!");
                 }
             },
 
@@ -83,7 +84,7 @@ $(document).ready(function () {
                 board.draggable = true;  // Re-enable dragging
                 rollbackPosition();
                 const errorMsg = xhr.responseJSON && xhr.responseJSON.message ? xhr.responseJSON.message : "Server error";
-                alert(errorMsg);
+                updateErrorMessage(errorMsg);
             }
         });
     }
@@ -164,6 +165,7 @@ $(document).ready(function () {
                 updateSpecialMove(response.special_moves);
                 updateMoveHistory([]);
                 updateCaptured({ white: [], black: [] });
+                updateErrorMessage("");  // Clear error on reset
             }
         });
     });
@@ -187,6 +189,10 @@ $(document).ready(function () {
         } else {
             $("#special-move-status").text("");
         }
+    }
+
+    function updateErrorMessage(message) {
+        $("#error-message").text(message);
     }
 
     function updateMoveHistory(history) {
