@@ -10,6 +10,8 @@ import pytest
 import re
 from playwright.sync_api import Page, expect
 
+from tests.helper import setup_board_position
+
 
 # Playwright runs headless by default - no extra flags needed!
 # To see browser: pytest tests/test_e2e_playwright.py --headed
@@ -371,24 +373,132 @@ def test_mobile_viewport(page: Page, live_server):
 # CRITICAL MISSING TESTS - Pawn Promotion & Game Over States
 # =============================================================================
 
-def test_pawn_promotion_modal_appears(page: Page, live_server):
-    """Test that promotion modal appears when pawn reaches rank 8"""
-    # This test requires specific AI cooperation - marking as aspirational
-    # In a real scenario, you'd disable AI or use API to set up position
-    pytest.skip("Promotion requires non-random AI cooperation - use API tests instead")
+def test_pawn_promotion_modal_appears_with_setup(page: Page, live_server):
+    """Test that promotion modal appears when pawn reaches 8th rank"""
+    page.goto(live_server)
+    
+    # Set up position: white pawn on a7, can capture black rook on a8
+    promotion_fen = "r1bqkbnr/Ppppppp1/8/8/8/8/1PPPPPPP/RNBQKBNR w KQkq - 0 1"
+    
+    setup_board_position(
+        page,
+        promotion_fen,
+        move_history=["a4", "h6", "a5", "h5", "a6", "h4", "axb7"],
+        captured_pieces={"white": ["p"], "black": []},
+        special_moves=[]
+    )
+    
+    # Verify pawn is on a7
+    a7_pawn = page.locator('[data-square="a7"] .piece-417db[data-piece="wP"]')
+    expect(a7_pawn).to_have_count(1)
+    
+    # Drag pawn to a8 (captures rook and promotes)
+    page.locator('[data-square="a7"] .piece-417db').drag_to(
+        page.locator('[data-square="a8"]')
+    )
+    page.wait_for_timeout(1000)
+    
+    # Promotion dialog should appear
+    promotion_dialog = page.locator("#promotion-dialog")
+    expect(promotion_dialog).to_be_visible()
+    
+    # Verify all promotion options are present
+    expect(page.locator('button[data-piece="q"]')).to_be_visible()
+    expect(page.locator('button[data-piece="r"]')).to_be_visible()
+    expect(page.locator('button[data-piece="b"]')).to_be_visible()
+    expect(page.locator('button[data-piece="n"]')).to_be_visible()
+    expect(page.locator('#cancel-promotion')).to_be_visible()
 
 
-def test_pawn_promotion_queen_selection(page: Page, live_server):
-    """Test selecting queen in promotion modal"""
-    # Requires deterministic board setup - better tested via API
-    pytest.skip("Promotion requires non-random AI cooperation - use API tests instead")
+def test_pawn_promotion_queen_selection_with_setup(page: Page, live_server):
+    """Test selecting queen in promotion dialog"""
+    page.goto(live_server)
+    
+    # Same setup as previous test
+    promotion_fen = "r1bqkbnr/Ppppppp1/8/8/8/8/1PPPPPPP/RNBQKBNR w KQkq - 0 1"
+    
+    setup_board_position(
+        page,
+        promotion_fen,
+        move_history=["a4", "h6", "a5", "h5", "a6", "h4", "axb7"],
+        captured_pieces={"white": ["p"], "black": []},
+        special_moves=[]
+    )
+    
+    # Promote pawn
+    page.locator('[data-square="a7"] .piece-417db').drag_to(
+        page.locator('[data-square="a8"]')
+    )
+    page.wait_for_timeout(1000)
+    
+    # Click Queen button
+    page.locator('button[data-piece="q"]').click()
+    page.wait_for_timeout(2000)  # Wait for move to complete and AI to respond
+    
+    # Verify a8 now has a queen (white or black depending on AI)
+    # Since AI responds, queen might be captured or board changed
+    # So we check move history instead
+    move_history = page.locator("#move-history li")
+    
+    # Should have original moves plus promotion move
+    # Look for promotion notation (typically includes '=' or '=Q')
+    history_text = page.locator("#move-history").text_content()
+    
+    # python-chess SAN uses '=' for promotion, e.g., "axb8=Q"
+    # Verify promotion happened by checking special moves
+    special_status = page.locator("#special-move-status")
+    special_text = special_status.text_content()
+    
+    # Should contain "Promotion to Q"
+    assert "Promotion" in special_text, f"Expected promotion in special moves, got: {special_text}"
+    assert "Q" in special_text, f"Expected queen promotion, got: {special_text}"
 
 
-def test_pawn_promotion_cancel_button(page: Page, live_server):
-    """Test that cancel button in promotion modal works"""
-    # Similar setup - this would need a stable promotion scenario
-    # Skipping for now as it requires complex setup
-    pytest.skip("Requires stable promotion setup - implement when promotion UI is reliable")
+def test_pawn_promotion_cancel_button_with_setup(page: Page, live_server):
+    """Test that cancel button in promotion dialog works correctly"""
+    page.goto(live_server)
+    
+    promotion_fen = "r1bqkbnr/Ppppppp1/8/8/8/8/1PPPPPPP/RNBQKBNR w KQkq - 0 1"
+    
+    setup_board_position(
+        page,
+        promotion_fen,
+        move_history=["a4", "h6", "a5", "h5", "a6", "h4", "axb7"],
+        captured_pieces={"white": ["p"], "black": []},
+        special_moves=[]
+    )
+    
+    # Drag pawn to a8
+    page.locator('[data-square="a7"] .piece-417db').drag_to(
+        page.locator('[data-square="a8"]')
+    )
+    page.wait_for_timeout(1000)
+    
+    # Cancel promotion
+    page.locator('#cancel-promotion').click()
+    page.wait_for_timeout(500)
+    
+    # Verify dialog is gone
+    promotion_dialog = page.locator("#promotion-dialog")
+    expect(promotion_dialog).not_to_be_visible()
+    
+    # Verify pawn is back on a7 (rollback)
+    a7_pawn = page.locator('[data-square="a7"] .piece-417db[data-piece="wP"]')
+    expect(a7_pawn).to_have_count(1)
+    
+    # Verify a8 still has black rook (move was cancelled)
+    a8_rook = page.locator('[data-square="a8"] .piece-417db[data-piece="bR"]')
+    expect(a8_rook).to_have_count(1)
+    
+    # Verify dragging is re-enabled (can make another move)
+    page.locator('[data-square="b2"] .piece-417db').drag_to(
+        page.locator('[data-square="b4"]')
+    )
+    page.wait_for_timeout(2000)
+    
+    # Should succeed (no error)
+    error_msg = page.locator("#error-message")
+    expect(error_msg).to_be_empty()
 
 
 def test_checkmate_displays_game_over(page: Page, live_server):
@@ -437,49 +547,74 @@ def test_checkmate_displays_game_over(page: Page, live_server):
             # (This assertion is tricky - may need to verify error or piece stays)
 
 
-def test_check_status_displays(page: Page, live_server):
-    """Test that 'Check!' message displays when king is in check"""
+def test_check_status_displays_with_setup(page: Page, live_server):
+    """Test that check status displays correctly - uses exact board setup"""
     page.goto(live_server)
-    page.wait_for_selector("#board")
-    page.wait_for_timeout(500)
     
-    # Set up a check position (requires specific moves)
-    # This is complex to guarantee - marking as aspirational
-    pytest.skip("Requires guaranteed check position - implement with specific board setup")
+    # Set up position where white king is in check
+    # Black queen on e5, white king on e1
+    check_fen = "rnb1kbnr/pppp1ppp/8/4q3/8/8/PPPP1PPP/RNBQKBNR w KQkq - 0 1"
+    
+    setup_board_position(
+        page, 
+        check_fen,
+        move_history=["e4", "e5", "Qe5"],
+        special_moves=[]
+    )
+    
+    # Verify board renders with correct position
+    board = page.locator("#board")
+    expect(board).to_be_visible()
+    
+    # Verify queen is on e5
+    e5_queen = page.locator('[data-square="e5"] .piece-417db[data-piece="bQ"]')
+    expect(e5_queen).to_have_count(1)
+    
+    # Verify status shows "Check!"
+    status = page.locator("#game-status")
+    expect(status).to_have_text(re.compile(r"Check!", re.IGNORECASE))
 
 
-def test_en_passant_capture_ui(page: Page, live_server):
-    """Test en passant capture works in UI and shows special move"""
+def test_en_passant_capture_ui_with_exact_setup(page: Page, live_server):
+    """Test en passant with exact board setup"""
     page.goto(live_server)
-    page.wait_for_selector("#board")
-    page.wait_for_timeout(500)
     
-    # Set up en passant: e4, (AI), e5, (AI needs to play f5 or similar)
-    page.locator('[data-square="e2"] .piece-417db').drag_to(
-        page.locator('[data-square="e4"]')
+    # Set up position: white pawn on e5, black pawn just moved f7-f5
+    # This creates en passant opportunity on f6
+    en_passant_fen = "rnbqkbnr/ppppp1pp/8/4Pp2/8/8/PPPP1PPP/RNBQKBNR w KQkq f6 0 1"
+    
+    setup_board_position(
+        page,
+        en_passant_fen,
+        move_history=["e4", "a6", "e5", "f5"],
+        captured_pieces={"white": [], "black": []},
+        special_moves=[]
     )
-    page.wait_for_timeout(2500)
     
-    page.locator('[data-square="e4"] .piece-417db').drag_to(
-        page.locator('[data-square="e5"]')
+    # Verify setup
+    e5_has_white = page.locator('[data-square="e5"] .piece-417db[data-piece="wP"]')
+    expect(e5_has_white).to_have_count(1)
+    
+    f5_has_black = page.locator('[data-square="f5"] .piece-417db[data-piece="bP"]')
+    expect(f5_has_black).to_have_count(1)
+    
+    # Perform en passant capture: e5 pawn captures f5 pawn by moving to f6
+    page.locator('[data-square="e5"] .piece-417db').drag_to(
+        page.locator('[data-square="f6"]')
     )
-    page.wait_for_timeout(2500)
+    page.wait_for_timeout(2000)
     
-    # Check if AI played f5 (random AI makes this unreliable)
-    f5_has_black_pawn = page.locator('[data-square="f5"] .piece-417db').count() > 0
+    # Verify f5 is now empty (captured pawn removed)
+    f5_pieces = page.locator('[data-square="f5"] .piece-417db')
+    expect(f5_pieces).to_have_count(0)
     
-    if f5_has_black_pawn:
-        # Execute en passant
-        page.locator('[data-square="e5"] .piece-417db').drag_to(
-            page.locator('[data-square="f6"]')
-        )
-        page.wait_for_timeout(2500)
-        
-        # Verify special move displays "En Passant"
-        special_status = page.locator("#special-move-status")
-        expect(special_status).to_have_text(re.compile("En Passant"))
-    else:
-        pytest.skip("AI did not set up en passant opportunity")
+    # Verify f6 has white pawn
+    f6_white = page.locator('[data-square="f6"] .piece-417db[data-piece="wP"]')
+    expect(f6_white).to_have_count(1)
+    
+    # Verify special moves shows "En Passant"
+    special_status = page.locator("#special-move-status")
+    expect(special_status).to_have_text(re.compile(r"En Passant", re.IGNORECASE))
 
 
 def test_error_message_clears_on_successful_move(page: Page, live_server):
@@ -565,3 +700,120 @@ def test_game_state_after_many_moves(page: Page, live_server):
     # Verify move history has entries
     move_history = page.locator("#move-history li")
     assert move_history.count() > 0, "Move history should have entries"
+
+def test_snapback_piece_to_original_square(page: Page, live_server):
+    """Test that dragging piece to same square doesn't cause errors"""
+    page.goto(live_server)
+    page.wait_for_selector("#board")
+    page.wait_for_timeout(500)
+    
+    # Try to verify snapback by checking end state
+    # Get e2 square bounds
+    e2_square = page.locator('[data-square="e2"]')
+    e2_bounds = e2_square.bounding_box()
+    
+    # Get piece on e2
+    e2_piece = e2_square.locator(".piece-417db")
+    piece_before = e2_piece.get_attribute("data-piece")
+    
+    # Simulate picking up and putting down in same square
+    # This triggers onDragStart and onDrop with same source/target
+    page.mouse.move(e2_bounds['x'] + e2_bounds['width']/2, 
+                    e2_bounds['y'] + e2_bounds['height']/2)
+    page.mouse.down()
+    # Move slightly (to trigger drag)
+    page.mouse.move(e2_bounds['x'] + e2_bounds['width']/2 + 2, 
+                    e2_bounds['y'] + e2_bounds['height']/2 + 2)
+    # Move back to original position
+    page.mouse.move(e2_bounds['x'] + e2_bounds['width']/2, 
+                    e2_bounds['y'] + e2_bounds['height']/2)
+    page.mouse.up()
+    page.wait_for_timeout(500)
+    
+    # Verify piece is still on e2 (snapback worked)
+    e2_piece_after = e2_square.locator(".piece-417db")
+    piece_after = e2_piece_after.get_attribute("data-piece")
+    
+    assert piece_before == piece_after, "Piece should remain on original square"
+    
+    # Verify no error message
+    error_msg = page.locator("#error-message")
+    expect(error_msg).to_be_empty()
+    
+    # Verify turn didn't change (no move was made)
+    status = page.locator("#game-status")
+    expect(status).to_have_text(re.compile(r"White's turn"))
+
+def test_castling_kingside_with_exact_setup(page: Page, live_server):
+    """Test kingside castling with controlled board position"""
+    page.goto(live_server)
+    
+    # Position: White can castle kingside (e1, g1, h1 clear)
+    castling_fen = "rnbqkbnr/pppppppp/8/8/8/5N2/PPPPPPPP/RNBQK2R w KQkq - 0 1"
+    
+    setup_board_position(
+        page,
+        castling_fen,
+        move_history=["Nf3"],
+        captured_pieces={"white": [], "black": []},
+        special_moves=[]
+    )
+    
+    # Perform castling: drag king from e1 to g1
+    page.locator('[data-square="e1"] .piece-417db').drag_to(
+        page.locator('[data-square="g1"]')
+    )
+    page.wait_for_timeout(2000)
+    
+    # Verify king is on g1
+    g1_king = page.locator('[data-square="g1"] .piece-417db[data-piece="wK"]')
+    expect(g1_king).to_have_count(1)
+    
+    # Verify rook is on f1 (moved from h1)
+    f1_rook = page.locator('[data-square="f1"] .piece-417db[data-piece="wR"]')
+    expect(f1_rook).to_have_count(1)
+    
+    # Verify special moves shows "Castling"
+    special_status = page.locator("#special-move-status")
+    expect(special_status).to_have_text(re.compile(r"Castling", re.IGNORECASE))
+
+
+def test_checkmate_fool_mate_with_setup(page: Page, live_server):
+    """Test checkmate detection with Fool's Mate position"""
+    page.goto(live_server)
+    
+    # Fool's Mate position (one move before mate)
+    # White has played f3 and g4, black queen can deliver checkmate on h4
+    pre_mate_fen = "rnbqkbnr/pppp1ppp/8/4p3/5PP1/5P2/PPPPP2P/RNBQKBNR b KQkq - 0 3"
+    
+    setup_board_position(
+        page,
+        pre_mate_fen,
+        move_history=["f3", "e5", "g4"],
+        captured_pieces={"white": [], "black": []},
+        special_moves=[]
+    )
+    
+    # Black queen delivers checkmate: Qh4#
+    page.locator('[data-square="d8"] .piece-417db').drag_to(
+        page.locator('[data-square="h4"]')
+    )
+    page.wait_for_timeout(1000)
+    
+    # Verify checkmate status
+    status = page.locator("#game-status")
+    expect(status).to_have_text(re.compile(r"Black wins.*Checkmate", re.IGNORECASE))
+    
+    # Verify game is over (cannot make more moves)
+    # Try to move a white piece - should fail or be prevented
+    move_history_before = page.locator("#move-history li").count()
+    
+    # Attempt to move white pawn
+    page.locator('[data-square="e2"] .piece-417db').drag_to(
+        page.locator('[data-square="e4"]')
+    )
+    page.wait_for_timeout(1000)
+    
+    # Move history should not increase (move prevented)
+    move_history_after = page.locator("#move-history li").count()
+    assert move_history_after == move_history_before, "No moves should be allowed after checkmate"

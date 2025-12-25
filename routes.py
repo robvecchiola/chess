@@ -158,3 +158,51 @@ def register_routes(app):
             "move_history": [],
             "captured_pieces": {'white': [], 'black': []}
         })
+    
+    @app.route("/test/set_position", methods=["POST"])
+    def test_set_position():
+        """
+        TEST-ONLY endpoint to set exact board position
+        Allows E2E tests to create specific scenarios
+        
+        Example: POST /test/set_position
+        {
+            "fen": "rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq e6 0 2",
+            "move_history": ["e4", "e5"],
+            "captured_pieces": {"white": [], "black": []},
+            "special_moves": []
+        }
+        """
+        # SECURITY: Only allow in testing mode
+        if not app.config.get('TESTING', False):
+            return jsonify({"error": "Endpoint only available in testing mode"}), 403
+        
+        data = request.get_json()
+        fen = data.get('fen')
+        
+        if not fen:
+            return jsonify({"error": "FEN required"}), 400
+        
+        # Validate FEN
+        try:
+            test_board = chess.Board(fen)
+        except ValueError as e:
+            return jsonify({"error": f"Invalid FEN: {str(e)}"}), 400
+        
+        # Set session state
+        session['fen'] = fen
+        session['move_history'] = data.get('move_history', [])
+        session['captured_pieces'] = data.get('captured_pieces', {'white': [], 'black': []})
+        session['special_moves'] = data.get('special_moves', [])
+        
+        board = chess.Board(fen)
+        
+        return jsonify({
+            "status": "ok",
+            "fen": fen,
+            "turn": "white" if board.turn == chess.WHITE else "black",
+            "check": board.is_check(),
+            "checkmate": board.is_checkmate(),
+            "stalemate": board.is_stalemate(),
+            "game_over": board.is_game_over()
+        })
