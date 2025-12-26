@@ -7,22 +7,36 @@
     <link rel="shortcut icon" href="{{ url_for('static', filename='favicon.png') }}" type="image/x-icon">
 </head>
 <body>
-    <h1>rob's Flask Chess AI</h1>
 
-    <div id="board"></div>
+    <h1 class="app-title">rob’s Flask Chess AI ♟️</h1>
 
-    <div id="game-info">
-        <div id="game-status">White's turn</div>
-        <div id="error-message" style="color: red; font-weight: bold;"></div>
-        <div id="special-move-status"></div>
-        <div id="captured-pieces">
-            <div>White's captured: <span id="white-captured"></span></div>
-            <div>Black's captured: <span id="black-captured"></span></div>
+    <div class="chess-app">
+        <div class="board-container">
+            <div id="board"></div>
         </div>
-        <div>Move history:</div>
-        <ol id="move-history"></ol>
+
+        <div class="side-panel">
+            <div id="game-status" class="status-card">White's turn</div>
+
+            <div id="error-message" class="error"></div>
+            <div id="special-move-status" class="special"></div>
+
+            <div class="card">
+                <h3>Captured Pieces</h3>
+                <div id="captured-pieces">
+                    <div>White: <span id="white-captured"></span></div>
+                    <div>Black: <span id="black-captured"></span></div>
+                </div>
+            </div>
+
+            <div class="card">
+                <h3>Move History</h3>
+                <ol id="move-history"></ol>
+            </div>
+
+            <button id="reset-btn">♻ New Game</button>
+        </div>
     </div>
-    <button id="reset-btn">New Game</button>
 
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script src="{{ url_for('static', filename='js/chessboard-1.0.0.min.js') }}"></script>
