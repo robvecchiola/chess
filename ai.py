@@ -170,17 +170,20 @@ def minimax(board, depth, alpha, beta, maximizing_white):
 
 
 def order_moves(board):
-    """Simple move ordering: captures first, then others"""
+    """Move ordering: promotions > captures > others"""
+    promotions = []
     captures = []
     others = []
-    
+
     for move in board.legal_moves:
-        if board.is_capture(move):
+        if move.promotion is not None:
+            promotions.append(move)
+        elif board.is_capture(move):
             captures.append(move)
         else:
             others.append(move)
-    
-    return captures + others
+
+    return promotions + captures + others
 
 
 def choose_ai_move(board, depth=2):
