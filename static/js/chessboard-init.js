@@ -246,11 +246,38 @@ $(document).ready(function () {
         $("#move-history").html(history.map(m => `<li>${m}</li>`).join(""));
     }
 
-    function updateCaptured(captured) {
-    if (!captured || !captured.white || !captured.black) return;
+    const MATERIAL_VALUES = {
+            
+        p: 1,
+        n: 3,
+        b: 3,
+        r: 5,
+        q: 9
+    };
 
-    renderCapturedRow("#white-captured", captured.white);
-    renderCapturedRow("#black-captured", captured.black);
+    function calculateMaterial(captured) {
+        let whiteScore = 0;
+        let blackScore = 0;
+
+        // White captured black pieces
+        captured.white.forEach(p => {
+            whiteScore += MATERIAL_VALUES[p.toLowerCase()] || 0;
+        });
+
+        // Black captured white pieces
+        captured.black.forEach(p => {
+            blackScore += MATERIAL_VALUES[p.toLowerCase()] || 0;
+        });
+
+        return whiteScore - blackScore; // positive = white ahead
+    }
+
+    function updateCaptured(captured) {
+        if (!captured || !captured.white || !captured.black) return;
+
+        renderCapturedRow("#white-captured", captured.white);
+        renderCapturedRow("#black-captured", captured.black);
+        updateMaterialAdvantage(captured);
     }
 
     function renderCapturedRow(selector, pieces) {
@@ -277,5 +304,28 @@ $(document).ready(function () {
 
             container.append(img);
         });
+    }
+
+    function updateMaterialAdvantage(captured) {
+            
+        const diff = calculateMaterial(captured);
+        const el = $("#material-advantage");
+
+        if (diff === 0) {
+            el.text("");
+            return;
+        }
+
+        if (diff > 0) {
+            el
+                .text(`White +${diff}`)
+                .removeClass("material-black")
+                .addClass("material-white");
+        } else {
+            el
+                .text(`Black +${Math.abs(diff)}`)
+                .removeClass("material-white")
+                .addClass("material-black");
+        }
     }
 });
