@@ -1,3 +1,4 @@
+from flask import json
 from playwright.sync_api import Page
 
 def setup_board_position(page: Page, fen: str, move_history=None, 
@@ -74,3 +75,17 @@ def drag_piece(page: Page, from_square: str, to_square: str, wait_ms: int = 3000
     from_piece.drag_to(to_square_elem)
     page.wait_for_timeout(wait_ms)
 
+def make_move(client, from_sq, to_sq, promotion=None):
+    payload = {"from": from_sq, "to": to_sq}
+    if promotion:
+        payload["promotion"] = promotion
+    rv = client.post("/move", data=json.dumps(payload), content_type="application/json")
+    return rv.get_json()
+
+def set_position(client, fen):
+    """Helper to set exact board position using session"""
+    with client.session_transaction() as sess:
+        sess['fen'] = fen
+        sess['move_history'] = []
+        sess['captured_pieces'] = {'white': [], 'black': []}
+        sess['special_moves'] = []

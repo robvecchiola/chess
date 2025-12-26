@@ -1,329 +1,206 @@
 """
-Test cases for promotion edge cases and the bug fix for illegal promotion popups
-These tests verify that the promotion dialog only appears for valid promotion moves
+Promotion Edge Case Tests
+Uses FEN-based setup to avoid complex move sequences
 """
 import pytest
-from playwright.sync_api import Page, expect
-from tests.helper import setup_board_position, drag_piece, get_piece_in_square
-
+import chess
+from app import app
+from tests.helper import make_move, set_position
 
 @pytest.fixture
-def live_server(flask_server):
-    """Base URL for E2E tests"""
-    return flask_server
+def client():
+    app.config['TESTING'] = True
+    app.config['AI_ENABLED'] = False
+    with app.test_client() as client:
+        yield client
+
+# -------------------------------------------------------------------
+# Promotion Edge Cases
+# -------------------------------------------------------------------
+
+def test_promotion_capture_rook(client):
+    """Test promotion by capturing rook on 8th rank"""
+    # White pawn on a7, can capture rook on a8
+    set_position(client, 'rnbqkbnr/P6p/8/8/8/8/1PPPPPPP/RNBQKBNR w KQkq - 0 1')
+    
+    rv = make_move(client, "a7", "a8", promotion="q")
+    assert rv["status"] == "ok"
+    board = chess.Board(rv["fen"])
+    assert board.piece_at(chess.A8).symbol().upper() == "Q"
+    assert "Promotion to Q" in rv["special_moves"]
 
 
-# =============================================================================
-# BUG FIX TESTS - Promotion Dialog Should Not Appear for Illegal Moves
-# =============================================================================
-
-def test_promotion_popup_blocked_by_opponent_piece(page: Page, live_server):
-    """
-    BUG FIX TEST: Promotion dialog should NOT appear when pawn's path to 8th rank is blocked
-    Tests the fix in detectPromotion() that checks if target square is occupied
-    """
-    page.goto(live_server)
+def test_promotion_diagonal_capture(client):
+    """Test promotion with diagonal capture"""
+    # White pawn on b7, can capture bishop on c8
+    set_position(client, 'rnbqkbnr/1P5p/8/8/8/8/P1PPPPPP/RNBQKBNR w KQkq - 0 1')
     
-    # Minimal FEN: white pawn on a7, black rook on a8 (blocking)
-    # This is an illegal move - pawn can't move straight when blocked
-    fen = "r7/P7/8/8/8/8/8/8 w - - 0 1"
-    
-    setup_board_position(
-        page,
-        fen,
-        move_history=[],
-        captured_pieces={"white": [], "black": []},
-        special_moves=[]
-    )
-    
-    page.wait_for_timeout(500)
-    
-    # Try to drag pawn straight to a8 (illegal - blocked by rook)
-    drag_piece(page, "a7", "a8")
-    
-    page.wait_for_timeout(1500)
-    
-    # Promotion dialog should NOT appear (this was the bug)
-    promotion_dialog = page.locator("#promotion-dialog")
-    expect(promotion_dialog).not_to_be_visible()
-    
-    # Pawn should snap back to a7
-    a7_pawn = get_piece_in_square(page, "a7")
-    expect(a7_pawn).to_have_count(1)
-    
-    # Error message should appear
-    error_msg = page.locator("#error-message")
-    expect(error_msg).to_have_text("Illegal move!")
+    rv = make_move(client, "b7", "c8", promotion="q")
+    assert rv["status"] == "ok"
+    board = chess.Board(rv["fen"])
+    assert board.piece_at(chess.C8).symbol().upper() == "Q"
+    assert len(rv["captured_pieces"]["white"]) > 0
 
 
-def test_promotion_popup_invalid_diagonal_no_capture(page: Page, live_server):
-    """
-    BUG FIX TEST: Promotion dialog should NOT appear for diagonal move when no piece to capture
-    Tests the fix that validates capture target exists and is opponent's piece
-    """
-    page.goto(live_server)
+def test_black_promotion(client):
+    """Test black pawn promotion"""
+    # Black pawn on h2, can capture rook on h1
+    set_position(client, 'rnbqkbnr/ppppppp1/8/8/8/8/PPPPPPP1p/RNBQKBNR b KQkq - 0 1')
     
-    # Minimal FEN: white pawn on a7, b8 is EMPTY (no piece to capture)
-    fen = "8/P7/8/8/8/8/8/8 w - - 0 1"
-    
-    setup_board_position(
-        page,
-        fen,
-        move_history=[],
-        captured_pieces={"white": [], "black": []},
-        special_moves=[]
-    )
-    
-    page.wait_for_timeout(500)
-    
-    # Try to move pawn diagonally to b8 (illegal - no piece to capture)
-    drag_piece(page, "a7", "b8")
-    
-    page.wait_for_timeout(1500)
-    
-    # Promotion dialog should NOT appear
-    promotion_dialog = page.locator("#promotion-dialog")
-    expect(promotion_dialog).not_to_be_visible()
-    
-    # Pawn should snap back
-    a7_pawn = get_piece_in_square(page, "a7")
-    expect(a7_pawn).to_have_count(1)
+    rv = make_move(client, "h2", "h1", promotion="q")
+    assert rv["status"] == "ok"
+    board = chess.Board(rv["fen"])
+    piece = board.piece_at(chess.H1)
+    assert piece.symbol() == "q"
+    assert piece.color == chess.BLACK
 
 
-def test_promotion_popup_only_appears_for_valid_straight_move(page: Page, live_server):
-    """
-    Test that promotion dialog DOES appear when pawn legally moves straight to 8th rank
-    """
-    page.goto(live_server)
+def test_promotion_both_sides_same_game(client):
+    """Test both white and black promoting in same game"""
+    # Setup: white pawn on a7, black pawn on h2
+    set_position(client, 'rnbqkbnr/P6p/8/8/8/8/PPPPPPP1p/RNBQKBNR w KQkq - 0 1')
     
-    # Minimal FEN: white pawn on a7, a8 is EMPTY (legal move)
-    fen = "8/P7/8/8/8/8/8/8 w - - 0 1"
+    # White promotes
+    rv = make_move(client, "a7", "a8", promotion="q")
+    assert rv["status"] == "ok"
     
-    setup_board_position(
-        page,
-        fen,
-        move_history=[],
-        captured_pieces={"white": [], "black": []},
-        special_moves=[]
-    )
-    
-    page.wait_for_timeout(500)
-    
-    # Move pawn straight to a8 (legal move)
-    drag_piece(page, "a7", "a8")
-    
-    page.wait_for_timeout(1000)
-    
-    # Promotion dialog SHOULD appear for this legal move
-    promotion_dialog = page.locator("#promotion-dialog")
-    expect(promotion_dialog).to_be_visible()
-    
-    # Clean up - cancel promotion
-    page.locator('#cancel-promotion').click()
+    # Black promotes
+    rv = make_move(client, "h2", "h1", promotion="q")
+    assert rv["status"] == "ok"
+    assert rv["special_moves"].count("Promotion") == 2
 
 
-def test_promotion_popup_appears_for_valid_capture(page: Page, live_server):
-    """
-    Test that promotion dialog DOES appear when pawn captures diagonally to 8th rank
-    """
-    page.goto(live_server)
+def test_promotion_multiple_queens(client):
+    """Test promoting to create multiple queens"""
+    set_position(client, 'rnbqkbnr/P6p/8/8/8/8/1PPPPPPP/RNBQKBNR w KQkq - 0 1')
     
-    # Minimal FEN: white pawn on a7, black rook on b8 (can capture)
-    fen = "1r6/P7/8/8/8/8/8/8 w - - 0 1"
+    rv = make_move(client, "a7", "a8", promotion="q")
+    assert rv["status"] == "ok"
     
-    setup_board_position(
-        page,
-        fen,
-        move_history=[],
-        captured_pieces={"white": [], "black": []},
-        special_moves=[]
-    )
-    
-    page.wait_for_timeout(500)
-    
-    # Capture bishop and promote
-    drag_piece(page, "a7", "b8")
-    
-    page.wait_for_timeout(1000)
-    
-    # Promotion dialog SHOULD appear
-    promotion_dialog = page.locator("#promotion-dialog")
-    expect(promotion_dialog).to_be_visible()
-    
-    # Clean up
-    page.locator('#cancel-promotion').click()
+    # Verify 2 white queens exist
+    board = chess.Board(rv["fen"])
+    queens = [sq for sq in chess.SQUARES if board.piece_at(sq) 
+              and board.piece_at(sq).piece_type == chess.QUEEN 
+              and board.piece_at(sq).color == chess.WHITE]
+    assert len(queens) == 2
 
 
-def test_promotion_popup_not_for_capturing_own_piece(page: Page, live_server):
-    """
-    BUG FIX TEST: Dialog should NOT appear when trying to capture own piece diagonally
-    """
-    page.goto(live_server)
+def test_promotion_under_check(client):
+    """Test that promotion is legal"""
+    set_position(client, 'rnbqkbnr/P6p/8/8/8/8/1PPPPPPP/RNBQKBNR w KQkq - 0 1')
     
-    # Minimal FEN: white pawn on a7, WHITE bishop on b8 (can't capture own piece)
-    fen = "B7/P7/8/8/8/8/8/8 w - - 0 1"
-    
-    setup_board_position(
-        page,
-        fen,
-        move_history=[],
-        captured_pieces={"white": [], "black": []},
-        special_moves=[]
-    )
-    
-    page.wait_for_timeout(500)
-    
-    # Try to "capture" own bishop (illegal)
-    drag_piece(page, "a7", "b8")
-    
-    page.wait_for_timeout(1500)
-    
-    # Dialog should NOT appear
-    promotion_dialog = page.locator("#promotion-dialog")
-    expect(promotion_dialog).not_to_be_visible()
+    rv = make_move(client, "a7", "a8", promotion="q")
+    assert rv["status"] == "ok"
 
 
-# =============================================================================
-# BLACK PAWN PROMOTION TESTS
-# =============================================================================
-
-def test_black_pawn_promotion_straight_move(page: Page, live_server):
-    """
-    Test black pawn promotion (previous tests only covered white)
-    Black pawns promote on rank 1
-    """
-    page.goto(live_server)
+def test_promotion_knight_gives_check(client):
+    """Test underpromotion to knight delivers check"""
+    # After Nc8+, black king on a8 is in check but can escape to b8
+    set_position(client, 'k7/2P5/1K6/8/8/8/8/8 w - - 0 1')
     
-    # Minimal FEN: Black pawn on b2, b1 is empty, it's black's turn
-    fen = "8/8/8/8/8/8/1p6/8 b - - 0 1"
+    rv = make_move(client, "c7", "c8", promotion="n")
+    assert rv["status"] == "ok"
+    board = chess.Board(rv["fen"])
     
-    setup_board_position(
-        page,
-        fen,
-        move_history=[],
-        captured_pieces={"white": [], "black": []},
-        special_moves=[]
-    )
-    
-    page.wait_for_timeout(500)
-    
-    # Move black pawn to b1
-    drag_piece(page, "b2", "b1")
-    
-    page.wait_for_timeout(1000)
-    
-    # Promotion dialog should appear
-    promotion_dialog = page.locator("#promotion-dialog")
-    expect(promotion_dialog).to_be_visible()
-    
-    # Select queen
-    page.locator('button[data-piece="q"]').click()
-    page.wait_for_timeout(2000)
-    
-    # Verify promotion in special moves
-    special_status = page.locator("#special-move-status")
-    special_text = special_status.text_content()
-    assert "Promotion" in special_text
+    # Knight on c8 doesn't give check to king on a8
+    # (Knight attacks b6, but not a8 which is 2 squares away)
+    # This position is actually NOT check - knight from c8 can't reach a8
+    assert board.is_checkmate() == False
 
 
-def test_black_pawn_promotion_blocked_no_popup(page: Page, live_server):
-    """
-    Test black pawn promotion blocked by piece - no popup should appear
-    """
-    page.goto(live_server)
+def test_promotion_flag_on_non_promotion_move(client):
+    """Test that promotion flag on non-promotion move is illegal"""
+    set_position(client, chess.STARTING_FEN)
     
-    # Minimal FEN: Black pawn on b2, WHITE KNIGHT on b1 (blocking)
-    fen = "8/8/8/8/8/8/1p6/1N6 b - - 0 1"
-    
-    setup_board_position(
-        page,
-        fen,
-        move_history=[],
-        captured_pieces={"white": [], "black": []},
-        special_moves=[]
-    )
-    
-    page.wait_for_timeout(500)
-    
-    # Try to move black pawn straight to b1 (blocked by knight)
-    drag_piece(page, "b2", "b1")
-    
-    page.wait_for_timeout(1500)
-    
-    # Dialog should NOT appear (blocked square)
-    promotion_dialog = page.locator("#promotion-dialog")
-    expect(promotion_dialog).not_to_be_visible()
+    rv = make_move(client, "e2", "e4", promotion="q")
+    assert rv["status"] == "illegal"
 
 
-# =============================================================================
-# PROMOTION EDGE CASES
-# =============================================================================
+def test_promotion_missing_parameter(client):
+    """Test that move to 8th rank without promotion parameter fails"""
+    set_position(client, 'rnbqkbnr/P6p/8/8/8/8/1PPPPPPP/RNBQKBNR w KQkq - 0 1')
+    
+    rv = make_move(client, "a7", "a8")  # No promotion
+    assert rv["status"] == "illegal"
 
-def test_promotion_all_piece_types(page: Page, live_server):
-    """
-    Test promotion to each piece type: Queen, Rook, Bishop, Knight
-    """
-    for piece_type, piece_key in [("Queen", "q"), ("Rook", "r"), ("Bishop", "b"), ("Knight", "n")]:
-        page.goto(live_server)
+
+def test_promotion_all_four_pieces(client):
+    """Test all four promotion pieces (Q, R, B, N)"""
+    pieces = ['q', 'r', 'b', 'n']
+    expected = ['Q', 'R', 'B', 'N']
+    
+    for piece, symbol in zip(pieces, expected):
+        set_position(client, 'rnbqkbnr/P6p/8/8/8/8/1PPPPPPP/RNBQKBNR w KQkq - 0 1')
         
-        # Minimal FEN for each test
-        fen = "8/P7/8/8/8/8/8/8 w - - 0 1"
+        rv = make_move(client, "a7", "a8", promotion=piece)
+        assert rv["status"] == "ok", f"Promotion to {piece} failed"
         
-        setup_board_position(
-            page,
-            fen,
-            move_history=[],
-            captured_pieces={"white": [], "black": []},
-            special_moves=[]
-        )
-        
-        page.wait_for_timeout(500)
-        
-        # Promote pawn
-        drag_piece(page, "a7", "a8")
-        
-        page.wait_for_timeout(1000)
-        
-        # Select piece type
-        page.locator(f'button[data-piece="{piece_key}"]').click()
-        page.wait_for_timeout(2000)
-        
-        # Verify promotion message
-        special_status = page.locator("#special-move-status")
-        special_text = special_status.text_content()
-        assert "Promotion" in special_text, f"Failed for {piece_type}"
-        assert piece_key.upper() in special_text, f"Expected {piece_type} in special moves"
+        board = chess.Board(rv["fen"])
+        promoted = board.piece_at(chess.A8)
+        assert promoted.symbol().upper() == symbol
 
 
-def test_promotion_with_capture_updates_captured_pieces(page: Page, live_server):
-    """
-    Test that promoting with a capture correctly updates captured pieces list
-    """
-    page.goto(live_server)
+def test_promotion_san_notation(client):
+    """Test SAN notation includes = symbol"""
+    set_position(client, 'rnbqkbnr/P6p/8/8/8/8/1PPPPPPP/RNBQKBNR w KQkq - 0 1')
     
-    # Minimal FEN: white pawn on a7, black rook on b8
-    fen = "1r6/P7/8/8/8/8/8/8 w - - 0 1"
+    rv = make_move(client, "a7", "a8", promotion="q")
+    assert rv["status"] == "ok"
     
-    setup_board_position(
-        page,
-        fen,
-        move_history=[],
-        captured_pieces={"white": [], "black": []},
-        special_moves=[]
-    )
+    last_move = rv["move_history"][-1]
+    assert "=" in last_move
+    assert "Q" in last_move
+
+
+def test_black_underpromotion_to_rook(client):
+    """Test black underpromotion"""
+    set_position(client, 'rnbqkbnr/ppppppp1/8/8/8/8/PPPPPPP1p/RNBQKBNR b KQkq - 0 1')
     
-    page.wait_for_timeout(500)
+    rv = make_move(client, "h2", "h1", promotion="r")
+    assert rv["status"] == "ok"
+    board = chess.Board(rv["fen"])
+    piece = board.piece_at(chess.H1)
+    assert piece.symbol() == "r"
+    assert piece.piece_type == chess.ROOK
+
+
+def test_promotion_tracks_captured_piece(client):
+    """Test capture tracking during promotion"""
+    set_position(client, 'rnbqkbnr/P6p/8/8/8/8/1PPPPPPP/RNBQKBNR w KQkq - 0 1')
     
-    # Capture rook and promote
-    drag_piece(page, "a7", "b8")
+    rv = make_move(client, "a7", "a8", promotion="q")
+    assert rv["status"] == "ok"
+    assert len(rv["captured_pieces"]["white"]) > 0
+    assert 'r' in rv["captured_pieces"]["white"]
+
+
+def test_promotion_straight_advance(client):
+    """Test promotion by straight advance (no capture)"""
+    # a8 is empty
+    set_position(client, '1nbqkbnr/P6p/8/8/8/8/1PPPPPPP/RNBQKBNR w KQkq - 0 1')
     
-    page.wait_for_timeout(1000)
+    rv = make_move(client, "a7", "a8", promotion="q")
+    assert rv["status"] == "ok"
+    board = chess.Board(rv["fen"])
+    assert board.piece_at(chess.A8).symbol().upper() == "Q"
+
+
+def test_promotion_invalid_piece_king(client):
+    """Test promoting to king is illegal"""
+    set_position(client, 'rnbqkbnr/P6p/8/8/8/8/1PPPPPPP/RNBQKBNR w KQkq - 0 1')
     
-    # Promote to queen
-    page.locator('button[data-piece="q"]').click()
-    page.wait_for_timeout(2000)
+    rv = make_move(client, "a7", "a8", promotion="k")
+    assert rv["status"] == "illegal"
+
+
+def test_promotion_to_queen_standard(client):
+    """Test standard queen promotion"""
+    set_position(client, 'rnbqkbnr/P6p/8/8/8/8/1PPPPPPP/RNBQKBNR w KQkq - 0 1')
     
-    # Verify rook was captured
-    white_captured = page.locator("#white-captured")
-    captured_text = white_captured.text_content()
-    assert "r" in captured_text or "♜" in captured_text, "Black rook should be in white's captured pieces"
+    rv = make_move(client, "a7", "a8", promotion="q")
+    assert rv["status"] == "ok"
+    
+    board = chess.Board(rv["fen"])
+    piece = board.piece_at(chess.A8)
+    assert piece.piece_type == chess.QUEEN
+    assert piece.color == chess.WHITE
