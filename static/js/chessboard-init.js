@@ -247,8 +247,35 @@ $(document).ready(function () {
     }
 
     function updateCaptured(captured) {
-        if (!captured || !captured.white || !captured.black) return;
-        $("#white-captured").text(captured.white.join(" "));
-        $("#black-captured").text(captured.black.join(" "));
+    if (!captured || !captured.white || !captured.black) return;
+
+    renderCapturedRow("#white-captured", captured.white);
+    renderCapturedRow("#black-captured", captured.black);
+    }
+
+    function renderCapturedRow(selector, pieces) {
+        const container = $(selector);
+        container.empty();
+
+        // Determine piece color based on which tray we're rendering
+        const isWhiteTray = selector === "#black-captured"; // white pieces captured by black
+        const colorPrefix = isWhiteTray ? "w" : "b";
+
+        pieces.forEach(piece => {
+            let pieceCode = piece;
+
+            // If backend sends single-letter piece (p, n, q, etc)
+            if (piece.length === 1) {
+                pieceCode = colorPrefix + piece.toUpperCase();
+            }
+
+            const img = $("<img>", {
+                src: `/static/images/chesspieces/wikipedia/${pieceCode}.png`,
+                alt: pieceCode,
+                class: "captured-piece"
+            });
+
+            container.append(img);
+        });
     }
 });

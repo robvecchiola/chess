@@ -120,3 +120,16 @@ body {
         width: 100%;
     }
 }
+
+.captured-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    min-height: 30px;
+}
+
+.captured-piece {
+    width: 26px;
+    height: 26px;
+    opacity: 0.95;
+}
