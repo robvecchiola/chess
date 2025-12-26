@@ -164,33 +164,30 @@ $(document).ready(function () {
         $("#promotion-dialog").remove();
 
         const html = `
-        <div id="promotion-dialog" style="
-            position:fixed;
-            top:50%;left:50%;
-            transform:translate(-50%,-50%);
-            background:#fff;
-            padding:20px;
-            border:2px solid black;
-            z-index:9999;">
-            <p>Promote pawn to:</p>
-            <button class="promote" data-piece="q">Queen</button>
-            <button class="promote" data-piece="r">Rook</button>
-            <button class="promote" data-piece="b">Bishop</button>
-            <button class="promote" data-piece="n">Knight</button>
-            <button id="cancel-promotion">Cancel</button>
+        <div id="promotion-dialog">
+            <p class="promotion-title">Promote pawn to:</p>
+
+            <div class="promotion-options">
+                <button class="promote" data-piece="q">Queen</button>
+                <button class="promote" data-piece="r">Rook</button>
+                <button class="promote" data-piece="b">Bishop</button>
+                <button class="promote" data-piece="n">Knight</button>
+            </div>
+
+            <button id="cancel-promotion" class="promotion-cancel">Cancel</button>
         </div>`;
 
         $("body").append(html);
 
-        $(".promote").click(function() {
+        $(".promote").click(function () {
             const selectedPiece = $(this).data("piece");
             $("#promotion-dialog").remove();
             callback(selectedPiece);
         });
 
-        $("#cancel-promotion").click(function() {
+        $("#cancel-promotion").click(function () {
             $("#promotion-dialog").remove();
-            board.draggable = true;  // Re-enable dragging on cancel
+            board.draggable = true;
             rollbackPosition();
         });
     }
