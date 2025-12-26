@@ -129,15 +129,30 @@ $(document).ready(function () {
 
         const sourceFile = source[0];
         const targetFile = target[0];
+        
+        // Get current board position to validate move
+        const position = board.position();
 
-        // Pawn moving diagonally — likely capture
+        // Pawn moving diagonally — capture move
         if (sourceFile !== targetFile) {
-            // Let the server decide if capture is valid
-            // BUT don't show promotion modal yet
+            // Check if target has opponent piece
+            const targetPiece = position[target];
+            if (!targetPiece || targetPiece[0] === piece[0]) {
+                // No piece or same color - invalid diagonal move
+                return { promotionNeeded: false };
+            }
+            // Valid capture to last rank - needs promotion
+            return { promotionNeeded: true };
+        }
+
+        // Straight pawn move to last rank
+        // Check if target square is empty
+        if (position[target]) {
+            // Target occupied - illegal move, don't show promotion dialog
             return { promotionNeeded: false };
         }
 
-        // Straight pawn move to last rank → promotion
+        // Valid straight move to last rank → promotion
         return { promotionNeeded: true };
     }
 
