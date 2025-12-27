@@ -78,7 +78,13 @@ body {
 #move-history {
     max-height: 180px;
     overflow-y: auto;
-    padding-left: 20px;
+    padding-left: 1.4em;   /* space for numbers */
+    margin-left: 0;
+}
+
+#move-history li {
+    margin-bottom: 4px;
+    line-height: 1.4;
 }
 
 /* Button */
