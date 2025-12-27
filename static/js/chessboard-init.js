@@ -227,11 +227,42 @@ $(document).ready(function () {
     }
 
     function updateSpecialMove(special_moves) {
-        if (special_moves && special_moves.length > 0) {
-            $("#special-move-status").html("Special moves:<br>" + special_moves.map(m => `• ${m}`).join("<br>"));
-        } else {
-            $("#special-move-status").text("");
-        }
+        const whiteList = $("#special-white");
+        const blackList = $("#special-black");
+
+        whiteList.empty();
+        blackList.empty();
+
+        if (!Array.isArray(special_moves)) return;
+
+        special_moves.forEach(move => {
+            // Expected formats:
+            // "White: O-O"
+            // "Black: e8=Q"
+            // or fallback: infer by prefix
+
+            let color = null;
+            let text = move;
+
+            if (move.startsWith("White")) {
+                color = "white";
+                text = move.replace(/^White:\s*/i, "");
+            } else if (move.startsWith("Black")) {
+                color = "black";
+                text = move.replace(/^Black:\s*/i, "");
+            }
+
+            const li = $("<li>").text(text);
+
+            if (color === "white") {
+                whiteList.append(li);
+            } else if (color === "black") {
+                blackList.append(li);
+            } else {
+                // Fallback: if color unknown, put in both or skip
+                whiteList.append(li);
+            }
+        });
     }
 
     function updateErrorMessage(message) {

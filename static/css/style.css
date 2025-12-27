@@ -247,3 +247,32 @@ body {
     font-size: 13px;
     cursor: pointer;
 }
+
+/* Special moves card */
+.special-moves {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    font-size: 0.95rem;
+}
+
+.special-column {
+    flex: 1;
+}
+
+.special-column strong {
+    display: block;
+    margin-bottom: 4px;
+    font-size: 0.9rem;
+    color: #555;
+}
+
+.special-column ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.special-column li {
+    padding: 2px 0;
+}
