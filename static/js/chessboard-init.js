@@ -366,7 +366,10 @@ $(document).ready(function () {
         const el = $("#material-advantage");
 
         if (diff === 0) {
-            el.text("");
+            el
+                .text("Even")
+                .removeClass("material-white material-black")
+                .css("color", "#666");
             return;
         }
 

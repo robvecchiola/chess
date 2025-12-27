@@ -188,11 +188,13 @@ body {
     opacity: 0.95;
 }
 
+/* Material advantage card styling */
 #material-advantage {
     text-align: center;
-    margin-top: 8px;
     font-weight: bold;
-    font-size: 16px;
+    font-size: 1.2rem;
+    padding: 8px 0;
+    color: #666;
 }
 
 .material-white {
