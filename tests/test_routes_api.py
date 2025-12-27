@@ -1005,17 +1005,22 @@ def test_en_passant_expires_after_one_move(client):
     """Test en passant opportunity expires if not taken immediately"""
     app.config['AI_ENABLED'] = False
     reset_board(client)
+    
     # Set up en passant
     make_move(client, "e2", "e4")
-    make_move(client, "d7", "d5")
+    make_move(client, "a7", "a6")  # Black makes irrelevant move
     make_move(client, "e4", "e5")
-    make_move(client, "f7", "f5")  # En passant available
-    # Make other move instead
-    make_move(client, "g1", "f3")
-    make_move(client, "g8", "f6")
-    # Try en passant now - should be illegal (expired)
-    rv = make_move(client, "e5", "f6")
-    assert rv["status"] == "illegal"
+    rv = make_move(client, "d7", "d5")  # Creates en passant on d6
+    
+    # FEN should show d6 as en passant square
+    assert "d6" in rv["fen"], "En passant square d6 should be set"
+    
+    # White makes a different move (not en passant)
+    rv = make_move(client, "g1", "f3")
+    
+    # En passant square should be gone from FEN
+    assert "d6" not in rv["fen"], "En passant square should have expired"
+    assert " - " in rv["fen"] or rv["fen"].split()[3] == "-", "En passant field should be '-'"
 
 def test_en_passant_not_available_on_single_square_pawn_move(client):
     """Test en passant only works on 2-square pawn moves"""
@@ -1080,17 +1085,18 @@ def test_captured_pieces_order_preserved(client):
     """Test that capture order is preserved in captured_pieces list"""
     app.config['AI_ENABLED'] = False
     reset_board(client)
-    # Capture pawn, then knight, then bishop
+    
+    # Capture pawn, then bishop
     make_move(client, "e2", "e4")
     make_move(client, "d7", "d5")
-    make_move(client, "e4", "d5")  # Capture pawn
-    make_move(client, "g8", "f6")
-    make_move(client, "d5", "d6")
-    make_move(client, "c8", "d7")
-    rv = make_move(client, "d6", "d7")  # Capture bishop
+    make_move(client, "e4", "d5")  # White captures black pawn
+    make_move(client, "c8", "f5")  # Black bishop to f5
+    make_move(client, "f1", "b5")  # White bishop to b5
+    make_move(client, "b8", "c6")  # Black knight to c6
+    rv = make_move(client, "b5", "c6")  # White bishop captures black knight
     
-    # Should have [pawn, bishop] in that order
-    assert rv["captured_pieces"]["white"] == ['p', 'b']
+    # Should have [pawn, knight] in that order
+    assert rv["captured_pieces"]["white"] == ['p', 'n']
 
 def test_special_moves_cleared_on_reset(client):
     """Verify special_moves is properly cleared on reset"""
@@ -1120,12 +1126,12 @@ def test_fen_includes_en_passant_square(client):
     reset_board(client)
     make_move(client, "e2", "e4")
     make_move(client, "d7", "d5")
-    rv = make_move(client, "e4", "e5")
-    make_move(client, "f7", "f5")
+    make_move(client, "e4", "e5")
+    rv = make_move(client, "f7", "f5")  # ← Check THIS response
     
     # FEN should include "f6" as en passant square
     fen = rv["fen"]
-    assert "f6" in fen
+    assert "f6" in fen, f"Expected 'f6' in FEN, got: {fen}"
 
 def test_fen_halfmove_clock_increments(client):
     """Test that halfmove clock increments correctly"""

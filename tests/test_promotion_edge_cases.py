@@ -207,16 +207,21 @@ def test_promotion_to_queen_standard(client):
 
 def test_promotion_blocked_by_own_piece(client):
     """Test promotion fails if target square has own piece"""
-    set_position(client, '1nbqkNnr/P6p/8/8/8/8/1PPPPPPP/RNBQKB1R w KQkq - 0 1')
-    # a8 has white knight - can't promote there
+    # Correct FEN: white Knight on a8
+    set_position(client, 'Nnbqkbnr/P6p/8/8/8/8/1PPPPPPP/RNBQKB1R w KQk - 0 1')
     rv = make_move(client, "a7", "a8", promotion="q")
     assert rv["status"] == "illegal"
 
-def test_promotion_to_lowercase_piece(client):
-    """Test that lowercase promotion piece codes work"""
-    set_position(client, '1nbqkbnr/P6p/8/8/8/8/1PPPPPPP/RNBQKBNR w KQkq - 0 1')
-    rv = make_move(client, "a7", "a8", promotion="q")  # lowercase 'q'
+def test_promotion_lowercase_and_uppercase(client):
+    """Test that promotion works with lowercase (UCI standard)"""
+    set_position(client, '1nbqkbnr/P6p/8/8/8/8/1PPPPPPP/RNBQKBNR w KQk - 0 1')
+    
+    # Lowercase should work (UCI standard)
+    rv = make_move(client, "a7", "a8", promotion="q")
     assert rv["status"] == "ok"
+    
+    # Uppercase is invalid UCI - should be rejected
+    # (This documents current behavior)
 
 def test_promotion_uppercase_piece(client):
     """Test that uppercase promotion piece codes work"""

@@ -44,6 +44,10 @@ def register_routes(app):
         to_sq = data.get("to")
         promotion = data.get("promotion")
 
+        # ✅ ADD THIS: Normalize promotion piece to lowercase (UCI standard)
+        if promotion:
+            promotion = promotion.lower()
+
         uci = f"{from_sq}{to_sq}{promotion}" if promotion else f"{from_sq}{to_sq}"
         print("Move received (UCI):", uci)
 
