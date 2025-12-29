@@ -361,7 +361,7 @@ def test_castling_queenside_with_b1_piece(client):
         make_move(client, from_sq, to_sq)
     # b1 knight still there - queenside castle should work
     rv = make_move(client, "e1", "c1")
-    assert rv["status"] == "ok"  # b1 doesn't block queenside castling
+    assert rv["status"] == "illegal"  # b1 blocks queenside castling
 
 def test_black_castling_into_check(client):
     """Test black cannot castle into check"""

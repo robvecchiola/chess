@@ -19,12 +19,14 @@ def get_game_state():
     captured_pieces = session.get('captured_pieces', {'white': [], 'black': []})
     special_moves = session.get('special_moves', [])
 
-    if 'fen' in session and session['fen']:
-        board = chess.Board(session['fen'])
-    else:
+    # Always rebuild board from move history to preserve position history for repetition detection
+    if move_history:
         board = chess.Board()
         for san in move_history:
             board.push_san(san)
+    else:
+        # Fallback to FEN only if no move history
+        board = chess.Board(session.get('fen', chess.STARTING_FEN))
 
     return board, move_history, captured_pieces, special_moves
 
