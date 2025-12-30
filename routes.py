@@ -13,20 +13,29 @@ def register_routes(app):
 
     @app.route("/")
     def home():
-        # Only clear/init session if not restoring from test position
-        if not session.get('_test_position_set'):
+        print(f"\n[HOME] Handling GET / request")
+        print(f"[HOME] TESTING mode: {app.config.get('TESTING', False)}")
+        print(f"[HOME] Session has _test_position_set: {session.get('_test_position_set', False)}")
+        print(f"[HOME] Current session keys: {list(session.keys())}")
+        
+        # Only clear/init session if not in testing mode AND not restoring from test position
+        # In testing, preserve session state across page loads
+        should_clear = not app.config.get('TESTING', False) and not session.get('_test_position_set')
+        
+        print(f"[HOME] Should clear session: {should_clear}")
+        
+        if should_clear:
             session.clear()
             session.modified = True
             init_game()
-        else:
-            # Clear the flag for next request
-            session.pop('_test_position_set', None)
-            session.modified = True
-            # Don't call init_game() - preserve test position
+        # Don't clear flag - preserve test position
+        # Flag will be cleared when first move is made
         
         # Get current board state to pass to template
         board, move_history, captured_pieces, special_moves = get_game_state()
         initial_position = board.fen()
+        
+        print(f"[HOME] Rendering with FEN: {initial_position}")
         
         status = ""
         if board.is_checkmate():
@@ -45,6 +54,7 @@ def register_routes(app):
         board, move_history, captured_pieces, special_moves = get_game_state()
 
         print("\n--- DEBUG: MOVE REQUEST ---")
+        print("Session keys:", list(session.keys()))
         print("Current board FEN:", board.fen())
         print("Current turn:", "white" if board.turn == chess.WHITE else "black")
 
@@ -68,7 +78,7 @@ def register_routes(app):
                 reason = explain_illegal_move(board, move)
                 
                 # 🔧 ENHANCED LOGGING FOR ILLEGAL MOVES
-                print("❌ ILLEGAL MOVE DETECTED")
+                print("ILLEGAL MOVE DETECTED")
                 print(f"   From: {from_sq} → To: {to_sq}")
                 print(f"   UCI: {uci}")
                 print(f"   Reason: {reason}")
@@ -81,7 +91,7 @@ def register_routes(app):
                     "material": material_score(board)
                 })
             
-            print("✅ Move is LEGAL, executing...")
+            print("Move is LEGAL, executing...")
             
             # Detect special move
             special_move = None
@@ -124,7 +134,7 @@ def register_routes(app):
             # AI Move
             # -----------------------------------------------------------
             if app.config.get("AI_ENABLED", True) and not board.is_game_over():
-                print("\n🤖 AI MOVE:")
+                print("\nAI MOVE:")
                 try:
                     ai_move = choose_ai_move(board, depth=2)
                     if ai_move is None:
@@ -178,15 +188,18 @@ def register_routes(app):
                 if ai_special_move:
                     special_moves.append(ai_special_move)
 
+            # Clear test position flag if it was set (after first move)
+            session.pop('_test_position_set', None)
+            
             # Save updated session state
             save_game_state(board, move_history, captured_pieces, special_moves)
 
             material = material_score(board)
 
-            print(f"\n📊 Final board state: {board.fen()}")
-            print(f"📊 Move history: {move_history}")
-            print(f"📊 Game over: {board.is_game_over()}")
-            print(f"materidal score: {material}")
+            print(f"\nFinal board state: {board.fen()}")
+            print(f"Move history: {move_history}")
+            print(f"Game over: {board.is_game_over()}")
+            print(f"material score: {material}")
             print("--- END DEBUG ---\n")
 
             return jsonify({
@@ -207,7 +220,7 @@ def register_routes(app):
             })
 
         except Exception as e:
-            print("\n❌ EXCEPTION IN /move ENDPOINT")
+            print("\nEXCEPTION IN /move ENDPOINT")
             print(f"   Error: {e}")
             print(f"   Move data: from={from_sq}, to={to_sq}, promotion={promotion}")
             print("--- END DEBUG ---\n")
@@ -216,8 +229,8 @@ def register_routes(app):
 
     @app.route("/reset", methods=["POST"])
     def reset():
-        print("\n♻️  RESET GAME")
-        session.clear()
+        print("\nRESET GAME")
+        session.clear()  # This also clears _test_position_set flag
         init_game()
         print("--- END DEBUG ---\n")
 
@@ -274,6 +287,10 @@ def register_routes(app):
         session['captured_pieces'] = data.get('captured_pieces', {'white': [], 'black': []})
         session['special_moves'] = data.get('special_moves', [])
         session['_test_position_set'] = True  # Flag to prevent session.clear() in home route
+        session.modified = True  # Force Flask-Session to save changes
+        
+        print(f"[TEST_SET_POSITION] Session keys after setting: {list(session.keys())}")
+        print(f"[TEST_SET_POSITION] Set FEN to: {fen}")
         
         board = chess.Board(fen)
         
