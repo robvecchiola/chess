@@ -21,6 +21,17 @@ class DevelopmentConfig(BaseConfig):
     # DO NOT use secrets.token_hex() here - it generates a new key on each import!
     SECRET_KEY = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
 
+class TestingConfig(BaseConfig):
+    DEBUG = True
+    TESTING = True
+    SECRET_KEY = 'test-secret-key-for-testing-only'
+    
+    # ⚡ Use cachelib for tests (in-memory but persists within process)
+    # This is synchronous and reliable for E2E tests
+    SESSION_TYPE = 'cachelib'
+    SESSION_PERMANENT = False
+    SESSION_USE_SIGNER = True
+
 class ProductionConfig(BaseConfig):
     DEBUG = False
     TESTING = False

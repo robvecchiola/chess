@@ -33,7 +33,7 @@ def get_game_state():
     else:
         # No move history: use FEN
         board = chess.Board(session.get('fen', chess.STARTING_FEN))
-
+    
     return board, move_history, captured_pieces, special_moves
 
 

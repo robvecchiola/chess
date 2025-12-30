@@ -6,6 +6,7 @@ import pytest
 import threading
 import time
 from app import app as flask_app
+from config import TestingConfig
 
 
 @pytest.fixture(scope="session")
@@ -14,8 +15,8 @@ def flask_server():
     Start Flask server in background thread for E2E tests
     Returns the base URL (e.g., http://localhost:5000)
     """
-    # Configure Flask for testing
-    flask_app.config['TESTING'] = True
+    # Configure Flask for testing - use TestingConfig for in-memory sessions
+    flask_app.config.from_object(TestingConfig)
     flask_app.config['AI_ENABLED'] = True  # Enable AI for E2E tests
     flask_app.config['DEBUG'] = False  # Disable debug mode in tests
     

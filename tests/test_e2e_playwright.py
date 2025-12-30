@@ -432,6 +432,9 @@ def test_pawn_promotion_queen_selection_with_setup(page: Page, live_server):
         special_moves=[]
     )
     
+    # Wait extra time to ensure session is fully written to disk
+    page.wait_for_timeout(2000)
+    
     # Instead of dragging, directly show promotion dialog
     page.evaluate("""
         showPromotionDialog(function(selectedPiece) {

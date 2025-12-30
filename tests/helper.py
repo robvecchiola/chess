@@ -7,17 +7,17 @@ def setup_board_position(page: Page, fen: str, move_history=None,
     """
     Helper to set exact board position using test endpoint.
     
+    CRITICAL: Uses page.request.post() to access Set-Cookie headers, then manually
+    updates browser context cookies AND makes browser re-request the page to sync cookies.
+    
     Flow:
-    1. Call /test/set_position endpoint to store FEN, move_history, etc in session
-    2. Set _test_position_set flag to prevent home route from clearing session  
-    3. Reload page to render new board state
-    4. Home route respects the flag and preserves the test position
+    1. page.request.post() to /test/set_position (Playwright API - has headers)
+    2. Extract Set-Cookie header from response
+    3. Add cookie to browser context via page.context.add_cookies()
+    4. Reload page so browser picks up the new cookie
+    5. Update board UI via JavaScript
     
-    Call page.goto(live_server) before using this.
-    
-    NOTE: Uses generic img selector instead of dynamic .piece-XXXXX class
-    because chessboard.js generates piece classes with hash suffixes that
-    change on each board initialization.
+    Note: page.reload() is safe here because home() route preserves session when TESTING=True
     """
     payload = {
         "fen": fen,
@@ -26,40 +26,70 @@ def setup_board_position(page: Page, fen: str, move_history=None,
         "special_moves": special_moves or []
     }
     
-    # Use page.request to make the call with the browser's session cookies
+    # Get base URL
     base_url = page.url.split('/')[0] + '//' + page.url.split('/')[2]
     
-    # Get cookies from the browser context
-    cookies = page.context.cookies()
-    cookie_header = "; ".join([f"{c['name']}={c['value']}" for c in cookies])
-    headers = {"Content-Type": "application/json", "Cookie": cookie_header}
+    # Use Playwright API request to access response headers
+    response = page.request.post(
+        f'{base_url}/test/set_position',
+        data=payload
+    )
     
-    response = page.request.post(f"{base_url}/test/set_position", data=json.dumps(payload), headers=headers)
-    text = response.text()
-    assert response.status == 200
+    response_json = response.json()
+    assert response_json.get('status') == 'ok', f"Failed to set position: {response_json}"
     
-    # Update the browser's cookies with the new session cookie from the response
-    set_cookie = response.headers.get('set-cookie')
-    if set_cookie:
-        cookie_parts = set_cookie.split(';')
-        name_value = cookie_parts[0].split('=')
-        name = name_value[0]
-        value = name_value[1]
+    # Extract and update session cookie
+    set_cookie_header = response.headers.get('set-cookie')
+    if set_cookie_header:
+        # Parse: "chess_session=<value>; Path=/; HttpOnly; SameSite=Lax"
+        cookie_parts = set_cookie_header.split(';')[0]
+        name, value = cookie_parts.split('=', 1)
+        
+        from urllib.parse import urlparse
+        parsed = urlparse(page.url)
+        
+        # Update browser context cookie
         page.context.add_cookies([{
-            'name': name,
-            'value': value,
-            'domain': 'localhost',
-            'path': '/',
-            'httpOnly': True,
-            'secure': False,
-            'sameSite': 'Lax'
+            'name': name.strip(),
+            'value': value.strip(),
+            'domain': parsed.hostname or 'localhost',
+            'path': '/'
+            # Note: Don't set httpOnly/sameSite - let browser use defaults
         }])
     
-    # Reload page - home route will preserve our test position due to flag
-    page.goto(base_url)
-    page.wait_for_selector("#board")
-    # Extra wait to ensure Chessboard.js fully re-initializes with new pieces
-    page.wait_for_timeout(3000)
+    # Reload page to sync cookie between browser and server
+    # This is safe because home() route won't clear session in TESTING mode
+    page.reload()
+    page.wait_for_load_state('networkidle')
+    
+    # Update board UI with custom position
+    page.evaluate(
+        """
+        (data) => {
+            if (window.board && data.fen) {
+                window.board.position(data.fen);
+            }
+            
+            let status = '';
+            if (data.checkmate) {
+                const winner = data.turn === 'white' ? 'Black' : 'White';
+                status = winner + ' wins — Checkmate!';
+            } else if (data.stalemate) {
+                status = 'Draw';
+            } else {
+                status = data.turn === 'white' ? "White's turn" : "Black's turn";
+                if (data.check) status += ' - Check!';
+            }
+            
+            const statusEl = document.getElementById('game-status');
+            if (statusEl) statusEl.textContent = status;
+        }
+        """,
+        response_json
+    )
+    
+    # Wait for board to stabilize
+    page.wait_for_timeout(500)
 
 def get_piece_in_square(page: Page, square: str):
     """
