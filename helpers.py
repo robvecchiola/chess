@@ -17,6 +17,8 @@ def get_game_state():
 
     move_history = session.get('move_history', [])
     captured_pieces = session.get('captured_pieces', {'white': [], 'black': []})
+    if not isinstance(captured_pieces, dict):
+        captured_pieces = {'white': [], 'black': []}
     special_moves = session.get('special_moves', [])
 
     # For repetition detection, we need position history, so rebuild from moves
@@ -29,10 +31,18 @@ def get_game_state():
                 board.push_san(san)
         except Exception:
             # Fallback: use FEN directly (test setup scenario)
-            board = chess.Board(session.get('fen', chess.STARTING_FEN))
+            try:
+                board = chess.Board(session.get('fen', chess.STARTING_FEN))
+            except ValueError:
+                # Invalid FEN, use starting position
+                board = chess.Board()
     else:
         # No move history: use FEN
-        board = chess.Board(session.get('fen', chess.STARTING_FEN))
+        try:
+            board = chess.Board(session.get('fen', chess.STARTING_FEN))
+        except ValueError:
+            # Invalid FEN, use starting position
+            board = chess.Board()
     
     return board, move_history, captured_pieces, special_moves
 

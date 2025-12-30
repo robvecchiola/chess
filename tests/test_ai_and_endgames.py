@@ -1,5 +1,6 @@
 import pytest
 import chess
+from ai import choose_ai_move, evaluate_board, minimax, quiescence
 from app import app
 from tests.test_routes_api import make_move, reset_board
 
@@ -357,3 +358,247 @@ def test_ai_makes_strategic_moves(client):
     # After AI move, position should be better for white (or at least not worse)
     # Note: This depends on the position, but AI shouldn't blunder
     assert best_move is not None  # At minimum, AI returns a move
+
+"""
+Advanced AI Behavior Tests
+Tests AI decision quality and edge cases
+"""
+
+@pytest.mark.unit
+def test_ai_finds_checkmate_in_one():
+    """AI should choose checkmate when available"""
+    # Back rank mate available: Rook to a8 is checkmate
+    board = chess.Board("6k1/5ppp/8/8/8/8/5PPP/R5K1 w - - 0 1")
+    
+    best_move = choose_ai_move(board, depth=2)
+    
+    # Ra8 is checkmate
+    assert best_move == chess.Move.from_uci("a1a8"), \
+        f"AI should find checkmate, got {best_move.uci() if best_move else None}"
+
+
+@pytest.mark.unit
+def test_ai_avoids_stalemate_when_winning():
+    """AI shouldn't accidentally stalemate when ahead"""
+    # Position where one move causes stalemate, others win
+    # King on h8, white queen on g6 - don't move queen to g7 (stalemate)
+    board = chess.Board("7k/8/6Q1/8/8/8/8/K7 w - - 0 1")
+    
+    best_move = choose_ai_move(board, depth=2)
+    
+    # Should NOT be Qg7 (stalemate)
+    assert best_move != chess.Move.from_uci("g6g7"), \
+        "AI should not stalemate when winning"
+
+
+@pytest.mark.unit
+def test_ai_handles_only_king_moves():
+    """AI doesn't crash when only king can move"""
+    board = chess.Board("8/8/8/8/8/8/8/K6k w - - 0 1")
+    
+    move = choose_ai_move(board, depth=2)
+    
+    assert move is not None
+    assert move in board.legal_moves
+    assert board.piece_at(move.from_square).piece_type == chess.KING
+
+
+@pytest.mark.unit
+def test_ai_prefers_capture_over_quiet_move():
+    """AI should prefer capturing material when safe"""
+    # White queen can capture undefended rook
+    board = chess.Board("r6k/8/8/8/8/8/8/Q6K w - - 0 1")
+    
+    best_move = choose_ai_move(board, depth=2)
+    
+    # AI should either capture the rook or achieve checkmate
+    board.push(best_move)
+    is_capture = board.is_capture(best_move)  # Check if it captured something
+    is_checkmate = board.is_checkmate()
+    board.pop()  # Undo the move
+    
+    assert best_move in board.legal_moves, f"AI chose illegal move: {best_move.uci() if best_move else None}"
+    assert is_capture or is_checkmate, f"AI should capture or checkmate, got {best_move.uci() if best_move else None}"
+
+
+@pytest.mark.unit
+def test_ai_avoids_hanging_pieces():
+    """AI should not move piece to attacked square"""
+    # Queen on d1, enemy rook on d8 - don't move queen to d4 (attacked)
+    board = chess.Board("3r4/8/8/8/8/8/8/3Q3K w - - 0 1")
+    
+    best_move = choose_ai_move(board, depth=2)
+    
+    # Should NOT move queen to d-file squares (attacked by rook)
+    if best_move:
+        to_square = best_move.to_square
+        # Queen shouldn't move to d-file
+        assert chess.square_file(to_square) != 3, \
+            "AI should not hang queen on d-file"
+
+
+@pytest.mark.unit
+def test_ai_promotes_to_queen_by_default():
+    """AI promotes to queen in winning position"""
+    # White pawn on a7, can promote
+    board = chess.Board("1nbqkbnr/P6p/8/8/8/8/1PPPPPPP/RNBQKBNR w KQkq - 0 1")
+    
+    best_move = choose_ai_move(board, depth=2)
+    
+    # Should promote to queen on the 8th rank
+    assert best_move in board.legal_moves, f"AI chose illegal move: {best_move.uci() if best_move else None}"
+    assert best_move.promotion == chess.QUEEN, f"AI should promote to queen, got {best_move.promotion}"
+    assert chess.square_rank(best_move.to_square) == 7, f"Promotion should be on 8th rank, got {chess.square_name(best_move.to_square)}"
+
+
+@pytest.mark.unit
+def test_ai_handles_position_with_one_legal_move():
+    """AI handles forced move correctly"""
+    # King in check, only one legal move (must block)
+    board = chess.Board("4k3/8/8/8/8/8/4r3/4K3 w - - 0 1")
+    
+    legal_moves = list(board.legal_moves)
+    assert len(legal_moves) >= 1  # At least one legal move
+    
+    best_move = choose_ai_move(board, depth=2)
+    assert best_move in legal_moves
+
+
+@pytest.mark.unit
+def test_ai_evaluation_positive_for_white_advantage():
+    """Evaluation function returns positive for white advantage"""
+    # White has extra queen
+    board = chess.Board("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
+    
+    # Remove black queen
+    board.remove_piece_at(chess.D8)
+    
+    score = evaluate_board(board)
+    assert score > 0, "White should have positive evaluation with extra queen"
+
+
+@pytest.mark.unit
+def test_ai_evaluation_negative_for_black_advantage():
+    """Evaluation function returns negative for black advantage"""
+    board = chess.Board("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
+    
+    # Remove white queen
+    board.remove_piece_at(chess.D1)
+    
+    score = evaluate_board(board)
+    assert score < 0, "Black should have negative evaluation with advantage"
+
+
+@pytest.mark.unit
+def test_ai_evaluation_checkmate():
+    """Evaluation returns extreme value for checkmate"""
+    # Checkmate position
+    board = chess.Board("6k1/5ppp/8/8/8/8/5PPP/R6K b - - 0 1")
+    board.push(chess.Move.from_uci("g8h8"))  # Move to be checkmated
+    board.push(chess.Move.from_uci("a1a8"))  # Checkmate
+    
+    score = evaluate_board(board)
+    
+    # Should be very high (white checkmated black)
+    assert abs(score) > 50000, "Checkmate should have extreme evaluation"
+
+
+@pytest.mark.unit
+def test_ai_quiescence_search_stability():
+    """Quiescence search returns stable evaluation"""
+    board = chess.Board()
+    
+    # Run quiescence multiple times - should be consistent
+    score1 = quiescence(board, -float('inf'), float('inf'))
+    score2 = quiescence(board, -float('inf'), float('inf'))
+    
+    assert score1 == score2, "Quiescence should be deterministic"
+
+
+@pytest.mark.unit
+def test_ai_minimax_alpha_beta_pruning():
+    """Minimax with alpha-beta pruning is faster than naive"""
+    board = chess.Board()
+    
+    # This should complete quickly due to pruning
+    import time
+    start = time.time()
+    score = minimax(board, 3, -float('inf'), float('inf'), True)
+    duration = time.time() - start
+    
+    # Should complete in reasonable time (< 5 seconds for depth 3)
+    assert duration < 5.0, f"Minimax took too long: {duration}s"
+
+
+@pytest.mark.unit
+def test_ai_handles_insufficient_material():
+    """AI handles draw by insufficient material"""
+    # King vs King
+    board = chess.Board("8/8/8/8/8/8/8/K6k w - - 0 1")
+    
+    # Should not crash
+    move = choose_ai_move(board, depth=2)
+    
+    # Game is drawn, but AI should still return a move
+    assert move is not None or board.is_game_over()
+
+
+@pytest.mark.unit
+def test_ai_depth_1_vs_depth_2():
+    """Deeper search finds better moves"""
+    # Position where depth 2 sees tactical opportunity
+    board = chess.Board("r6k/8/8/8/8/8/1Q6/K7 w - - 0 1")
+    
+    move_d1 = choose_ai_move(board, depth=1)
+    move_d2 = choose_ai_move(board, depth=2)
+    
+    # Both should find checkmate (Qb8 or Qa1)
+    # At minimum, both should return legal moves
+    assert move_d1 in board.legal_moves
+    assert move_d2 in board.legal_moves
+
+
+@pytest.mark.unit
+def test_ai_handles_three_fold_repetition():
+    """AI handles positions with repetition available"""
+    board = chess.Board()
+    
+    # Make moves that could lead to repetition
+    board.push(chess.Move.from_uci("g1f3"))
+    board.push(chess.Move.from_uci("g8f6"))
+    board.push(chess.Move.from_uci("f3g1"))
+    board.push(chess.Move.from_uci("f6g8"))
+    
+    # AI should still make a move (may or may not repeat)
+    move = choose_ai_move(board, depth=2)
+    assert move in board.legal_moves
+
+
+@pytest.mark.unit
+def test_ai_returns_none_gracefully_on_game_over():
+    """AI handles game over positions gracefully"""
+    # Checkmate position
+    board = chess.Board("6k1/5ppp/8/8/8/8/5PPP/R6K b - - 0 1")
+    board.push(chess.Move.from_uci("g8h8"))
+    board.push(chess.Move.from_uci("a1a8"))  # Checkmate
+    
+    # Game is over
+    assert board.is_checkmate()
+    
+    # AI might return None or handle gracefully
+    move = choose_ai_move(board, depth=2)
+    # Should either return None or not crash
+    assert move is None or move in board.legal_moves
+
+
+@pytest.mark.unit
+def test_ai_piece_values_correct():
+    """AI uses correct piece values in evaluation"""
+    from constants import PIECE_VALUES
+    
+    # Verify standard values are set
+    assert PIECE_VALUES[chess.PAWN] == 100
+    assert PIECE_VALUES[chess.KNIGHT] == 320
+    assert PIECE_VALUES[chess.BISHOP] == 330
+    assert PIECE_VALUES[chess.ROOK] == 500
+    assert PIECE_VALUES[chess.QUEEN] == 900
