@@ -28,7 +28,16 @@ def register_routes(app):
         board, move_history, captured_pieces, special_moves = get_game_state()
         initial_position = board.fen()
         
-        return render_template("chess.html", initial_position=initial_position)
+        status = ""
+        if board.is_checkmate():
+            winner = "White" if board.turn == chess.BLACK else "Black"
+            status = f"{winner} wins by Checkmate!"
+        elif board.is_check():
+            status = "Check!"
+        else:
+            status = "White's turn" if board.turn == chess.WHITE else "Black's turn"
+        
+        return render_template("chess.html", initial_position=initial_position, status=status)
 
 
     @app.route("/move", methods=["POST"])

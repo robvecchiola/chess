@@ -2,7 +2,7 @@ from flask import json
 from playwright.sync_api import Page
 import requests
 
-async def setup_board_position(page: Page, fen: str, move_history=None, 
+def setup_board_position(page: Page, fen: str, move_history=None, 
                         captured_pieces=None, special_moves=None):
     """
     Helper to set exact board position using test endpoint.
@@ -28,11 +28,32 @@ async def setup_board_position(page: Page, fen: str, move_history=None,
     
     # Use page.request to make the call with the browser's session cookies
     base_url = page.url.split('/')[0] + '//' + page.url.split('/')[2]
-    response = await page.request.post(f"{base_url}/test/set_position", data=json.dumps(payload), headers={"Content-Type": "application/json"})
-    print("Set position status:", response.status)
-    text = await response.text()
-    print("Set position text:", text)
+    
+    # Get cookies from the browser context
+    cookies = page.context.cookies()
+    cookie_header = "; ".join([f"{c['name']}={c['value']}" for c in cookies])
+    headers = {"Content-Type": "application/json", "Cookie": cookie_header}
+    
+    response = page.request.post(f"{base_url}/test/set_position", data=json.dumps(payload), headers=headers)
+    text = response.text()
     assert response.status == 200
+    
+    # Update the browser's cookies with the new session cookie from the response
+    set_cookie = response.headers.get('set-cookie')
+    if set_cookie:
+        cookie_parts = set_cookie.split(';')
+        name_value = cookie_parts[0].split('=')
+        name = name_value[0]
+        value = name_value[1]
+        page.context.add_cookies([{
+            'name': name,
+            'value': value,
+            'domain': 'localhost',
+            'path': '/',
+            'httpOnly': True,
+            'secure': False,
+            'sameSite': 'Lax'
+        }])
     
     # Reload page - home route will preserve our test position due to flag
     page.goto(base_url)
