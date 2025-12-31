@@ -382,37 +382,35 @@ def test_castling_after_king_moved_and_returned(client):
 
 def test_castling_after_en_passant(client):
     """En passant doesn't affect castling rights"""
-    # Setup: castling rights intact, en passant happens
-    set_position(client, 'r3k2r/pppppppp/8/3Pp3/8/8/PPP1PPPP/R3K2R w KQkq e6 0 1')
+    # Setup: realistic position with knights developed and en passant opportunity
+    set_position(client, 'r3k2r/ppp1pppp/2n5/3Pp3/8/5N2/PPP1PPPP/R1B1K2R w KQkq e6 0 1')
     
     # En passant
     rv = make_move(client, "d5", "e6")
     assert rv["status"] == "ok"
     
-    # White should still be able to castle (make moves to test)
-    # Clear kingside for castling
-    make_move(client, "g8", "f6")
-    make_move(client, "g1", "f3")
-    make_move(client, "f6", "g8")
-    make_move(client, "f1", "e2")
-    make_move(client, "g8", "f6")
+    # White should still be able to castle kingside
+    # Clear f1 bishop first
+    make_move(client, "c6", "d4")  # Black knight moves
+    make_move(client, "c1", "g5")  # White bishop moves out
+    make_move(client, "d4", "c6")  # Black knight back
     
-    rv = make_move(client, "e1", "g1")
+    rv = make_move(client, "e1", "g1")  # White castles
     assert rv["status"] == "ok"
 
 
 def test_castling_with_promoted_rook(client):
     """Cannot castle with promoted piece (even if on h1)"""
-    # Promote pawn to rook on h1
-    set_position(client, '4k3/8/8/8/8/8/7P/4K3 w - - 0 1')
+    # Promote pawn to rook on h8 (8th rank for white)
+    set_position(client, '4k3/7P/8/8/8/8/8/4K3 w - - 0 1')
     
-    # Promote to rook
-    rv = make_move(client, "h2", "h1", promotion="r")
+    # Promote to rook on h8
+    rv = make_move(client, "h7", "h8", promotion="r")
     assert rv["status"] == "ok"
     
-    # Try to castle with promoted rook (should fail - no castling rights)
-    # Actually, FEN didn't have castling rights to begin with
-    # This test documents that promoted rooks don't grant castling
+    # Board now has promoted rook on h8, but no castling rights in FEN
+    # This test documents that promoted rooks don't grant castling rights
+    # (FEN never had castling rights, so can't castle regardless)
 
 
 def test_castling_loses_rights_after_rook_capture(client):
@@ -430,7 +428,16 @@ def test_castling_loses_rights_after_rook_capture(client):
 
 def test_castling_both_sides_same_game(client):
     """Both white and black can castle in same game"""
-    set_position(client, 'r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1')
+    reset_board(client)
+    
+    # Clear path for both sides to castle kingside
+    moves = [
+        ("e2", "e4"), ("e7", "e5"),
+        ("g1", "f3"), ("g8", "f6"),
+        ("f1", "e2"), ("f8", "e7"),
+    ]
+    for from_sq, to_sq in moves:
+        make_move(client, from_sq, to_sq)
     
     # White castles kingside
     rv1 = make_move(client, "e1", "g1")
@@ -487,7 +494,16 @@ def test_queenside_castling_notation(client):
 
 def test_castling_special_moves_white_vs_black(client):
     """Special moves distinguish white vs black castling"""
-    set_position(client, 'r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1')
+    reset_board(client)
+    
+    # Clear path for both sides
+    moves = [
+        ("e2", "e4"), ("e7", "e5"),
+        ("g1", "f3"), ("g8", "f6"),
+        ("f1", "e2"), ("f8", "e7"),
+    ]
+    for from_sq, to_sq in moves:
+        make_move(client, from_sq, to_sq)
     
     # White castles
     rv1 = make_move(client, "e1", "g1")
@@ -500,16 +516,28 @@ def test_castling_special_moves_white_vs_black(client):
 
 def test_castling_fen_updates_rights_correctly(client):
     """FEN castling rights updated after castling"""
-    set_position(client, 'r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1')
+    reset_board(client)
+    
+    # Clear path for white to castle kingside
+    moves = [
+        ("e2", "e4"), ("e7", "e5"),
+        ("g1", "f3"), ("g8", "f6"),
+        ("f1", "e2"), ("f8", "e7"),
+    ]
+    for from_sq, to_sq in moves:
+        make_move(client, from_sq, to_sq)
     
     rv = make_move(client, "e1", "g1")
     
-    # After white kingside castles, should lose K rights
+    # After white kingside castles, should lose K and Q rights (white moved king)
+    # Black should retain both rights (kq)
     fen_parts = rv["fen"].split()
     castling_rights = fen_parts[2]
     
-    assert "K" not in castling_rights
-    assert "Q" in castling_rights  # Queenside still available
+    assert "K" not in castling_rights  # White lost kingside
+    assert "Q" not in castling_rights  # White lost queenside (king moved)
+    assert "k" in castling_rights  # Black retains kingside
+    assert "q" in castling_rights  # Black retains queenside
 
 
 def test_castling_through_attacked_square_detailed(client):
@@ -527,13 +555,17 @@ def test_castling_through_attacked_square_detailed(client):
 
 def test_castling_rook_under_attack_is_legal(client):
     """Castling is legal even if rook is under attack"""
-    # Black bishop attacks h1 rook
-    set_position(client, 'r3k2r/8/8/8/8/6b1/8/R3K2R w KQkq - 0 1')
+    # Black rook on h8 attacks h1 rook (through h-file)
+    # King's path (e1-f1-g1) is safe
+    set_position(client, '4k2r/8/8/8/8/8/8/R3K2R w KQ - 0 1')
     
-    board = chess.Board('r3k2r/8/8/8/8/6b1/8/R3K2R w KQkq - 0 1')
-    assert board.is_attacked_by(chess.BLACK, chess.H1)
+    board = chess.Board('4k2r/8/8/8/8/8/8/R3K2R w KQ - 0 1')
+    assert board.is_attacked_by(chess.BLACK, chess.H1), "h1 should be under attack"
+    assert not board.is_attacked_by(chess.BLACK, chess.E1), "e1 should be safe"
+    assert not board.is_attacked_by(chess.BLACK, chess.F1), "f1 should be safe"
+    assert not board.is_attacked_by(chess.BLACK, chess.G1), "g1 should be safe"
     
-    # White can still castle kingside
+    # White can still castle kingside (rook being attacked doesn't matter)
     rv = make_move(client, "e1", "g1")
     assert rv["status"] == "ok"
 
