@@ -8,7 +8,6 @@ Run with specific browser: pytest tests/test_e2e_playwright.py --browser firefox
 """
 import pytest
 import re
-import asyncio
 from playwright.sync_api import Page, expect
 
 from tests.helper import setup_board_position

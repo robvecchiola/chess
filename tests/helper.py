@@ -1,6 +1,5 @@
 from flask import json
 from playwright.sync_api import Page
-import requests
 
 def setup_board_position(page: Page, fen: str, move_history=None, 
                         captured_pieces=None, special_moves=None):
