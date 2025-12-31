@@ -20,16 +20,17 @@ def test_session_persists_across_requests(client):
     """Session state persists between API calls"""
     reset_board(client)
     
-    # First request
+    # First request (white)
     rv1 = make_move(client, "e2", "e4")
     assert rv1["status"] == "ok"
     assert len(rv1["move_history"]) == 1
     
-    # Second request (same session)
-    rv2 = make_move(client, "d2", "d4")
+    # Second request (black, alternating turn)
+    rv2 = make_move(client, "e7", "e5")
     assert rv2["status"] == "ok"
     assert len(rv2["move_history"]) == 2
     assert rv2["move_history"][0] == "e4"
+    assert rv2["move_history"][1] == "e5"
 
 
 def test_session_isolated_between_clients(client):
@@ -111,12 +112,12 @@ def test_session_state_after_illegal_move(client):
     reset_board(client)
     make_move(client, "e2", "e4")
     
-    # Illegal move
+    # Illegal move (white trying to move again)
     rv_illegal = make_move(client, "e4", "e6")
     assert rv_illegal["status"] == "illegal"
     
-    # Session should still be valid
-    rv_legal = make_move(client, "d2", "d4")
+    # Session should still be valid; make legal black move
+    rv_legal = make_move(client, "e7", "e5")
     assert rv_legal["status"] == "ok"
     assert len(rv_legal["move_history"]) == 2
 
@@ -126,12 +127,13 @@ def test_session_handles_concurrent_requests():
     with app.test_client() as client:
         reset_board(client)
         
-        # Simulate rapid moves
-        moves = [("e2", "e4"), ("d2", "d4"), ("g1", "f3")]
+        # Simulate rapid alternating moves
+        moves = [("e2", "e4"), ("e7", "e5"), ("g1", "f3")]
         
-        for from_sq, to_sq in moves:
+        for i, (from_sq, to_sq) in enumerate(moves):
             rv = make_move(client, from_sq, to_sq)
             assert rv["status"] == "ok"
+            assert len(rv["move_history"]) == i + 1
 
 
 def test_session_data_types_preserved(client):
@@ -139,18 +141,17 @@ def test_session_data_types_preserved(client):
     reset_board(client)
     make_move(client, "e2", "e4")
     
-    # Make capture
+    # Make capture (white captures black pawn)
     with client.session_transaction() as sess:
         sess['fen'] = "rnbqkbnr/pppppppp/8/8/3P4/8/PPP1PPPP/RNBQKBNR b KQkq - 0 1"
     
     make_move(client, "d7", "d5")
     rv = make_move(client, "d4", "d5")
     
-    # Verify types
+    # Verify types on successful move response
     assert isinstance(rv["move_history"], list)
     assert isinstance(rv["captured_pieces"], dict)
     assert isinstance(rv["captured_pieces"]["white"], list)
-
 
 def test_session_size_reasonable_after_long_game(client):
     """Session file size stays reasonable after many moves"""
