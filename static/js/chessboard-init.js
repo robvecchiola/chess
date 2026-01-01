@@ -352,7 +352,7 @@ $(document).ready(function () {
 
         if (material === 0) {
             el
-            .text("Material: Even")
+            .text("Even")
             .removeClass("material-white material-black");
             return;
         }

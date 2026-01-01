@@ -80,6 +80,7 @@ body {
     overflow-y: auto;
     padding-left: 1.4em;   /* space for numbers */
     margin-left: 0;
+    table-layout: fixed;
 }
 
 #move-history li {
@@ -191,8 +192,6 @@ body {
 /* Material advantage card styling */
 #material-advantage {
     text-align: center;
-    font-weight: bold;
-    font-size: 1.2rem;
     padding: 8px 0;
     color: #666;
 }
@@ -329,4 +328,16 @@ body {
 .tooltip-icon:focus .tooltip-text {
     visibility: visible;
     opacity: 1;
+}
+
+/* Position summary rows */
+.position-row {
+    display: flex;
+    justify-content: space-between;
+    margin: 4px 0;
+    font-size: 0.95rem;
+}
+
+.position-row .label {
+    font-weight: 600;
 }
