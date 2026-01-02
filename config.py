@@ -1,4 +1,5 @@
 import os
+from cachelib import SimpleCache
 
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 
@@ -43,6 +44,9 @@ class TestingConfig(BaseConfig):
     SESSION_PERMANENT = False
     SESSION_USE_SIGNER = True
     SESSION_FILE_DIR = None
+    
+    # ✅ Explicitly configure cachelib to avoid runtime warning
+    SESSION_CACHELIB = SimpleCache()
 
 class ProductionConfig(BaseConfig):
     DEBUG = False
