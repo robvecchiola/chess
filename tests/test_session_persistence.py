@@ -6,7 +6,7 @@ import pytest
 import chess
 import os
 from app import create_app
-from config import TestingConfig
+from config import TestingConfig, TestingConfigFilesystem
 from tests.test_routes_api import make_move, reset_board
 
 app = create_app(TestingConfig)
@@ -16,6 +16,15 @@ def client():
     app.config['TESTING'] = True
     app.config['AI_ENABLED'] = False
     with app.test_client() as client:
+        yield client
+
+
+@pytest.fixture
+def filesystem_client():
+    """Client using filesystem sessions (for file-based session tests)"""
+    fs_app = create_app(TestingConfigFilesystem)
+    fs_app.config['AI_ENABLED'] = False
+    with fs_app.test_client() as client:
         yield client
 
 
@@ -69,13 +78,15 @@ def test_session_survives_multiple_moves(client):
             assert len(rv["move_history"]) >= i
 
 
-def test_session_file_created_on_filesystem(client):
+def test_session_file_created_on_filesystem(filesystem_client):
     """Verify session file is created in flask_session/"""
-    reset_board(client)
-    make_move(client, "e2", "e4")
+    from config import TestingConfigFilesystem
+    
+    reset_board(filesystem_client)
+    make_move(filesystem_client, "e2", "e4")
     
     # Check flask_session directory exists and has files
-    session_dir = app.config.get('SESSION_FILE_DIR', 'flask_session')
+    session_dir = TestingConfigFilesystem.SESSION_FILE_DIR
     assert os.path.exists(session_dir), "Session directory should exist"
     
     files = os.listdir(session_dir)
@@ -154,19 +165,21 @@ def test_session_data_types_preserved(client):
     assert isinstance(rv["captured_pieces"]["white"], list)
     assert len(rv["captured_pieces"]["white"]) == 1  # Captured one pawn
 
-def test_session_size_reasonable_after_long_game(client):
+def test_session_size_reasonable_after_long_game(filesystem_client):
     """Session file size stays reasonable after many moves"""
-    reset_board(client)
+    from config import TestingConfigFilesystem
+    
+    reset_board(filesystem_client)
     
     # Make 50 moves (100 half-moves)
     for i in range(25):
-        make_move(client, "g1", "f3")
-        make_move(client, "g8", "f6")
-        make_move(client, "f3", "g1")
-        make_move(client, "f6", "g8")
+        make_move(filesystem_client, "g1", "f3")
+        make_move(filesystem_client, "g8", "f6")
+        make_move(filesystem_client, "f3", "g1")
+        make_move(filesystem_client, "f6", "g8")
     
     # Check session file size
-    session_dir = app.config.get('SESSION_FILE_DIR', 'flask_session')
+    session_dir = TestingConfigFilesystem.SESSION_FILE_DIR
     files = os.listdir(session_dir)
     
     if files:

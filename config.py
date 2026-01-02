@@ -48,6 +48,23 @@ class TestingConfig(BaseConfig):
     # ✅ Explicitly configure cachelib to avoid runtime warning
     SESSION_CACHELIB = SimpleCache()
 
+
+class TestingConfigFilesystem(BaseConfig):
+    """Testing config that uses filesystem sessions (for session file tests)"""
+    DEBUG = True
+    TESTING = True
+    SECRET_KEY = 'test-secret-key-for-testing-only'
+    SQLALCHEMY_DATABASE_URI = (
+        "mysql+pymysql://chess_tester:strongpassword@localhost/chess_app_test"
+    )
+    
+    # 🗄️ Use filesystem sessions for tests that check session files
+    SESSION_TYPE = 'filesystem'
+    SESSION_FILE_DIR = os.path.join(BASE_DIR, 'flask_session')
+    SESSION_PERMANENT = False
+    SESSION_USE_SIGNER = True
+
+
 class ProductionConfig(BaseConfig):
     DEBUG = False
     TESTING = False
