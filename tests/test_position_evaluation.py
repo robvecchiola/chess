@@ -8,8 +8,8 @@ Tests the evaluate_board() function which combines:
 """
 import chess
 import pytest
-from ai import evaluate_board, material_score, quiescence, minimax
-from constants import PIECE_VALUES, PIECE_TABLES
+from ai import evaluate_board, quiescence, minimax
+from constants import PIECE_VALUES
 
 
 # =============================================================================
@@ -415,8 +415,11 @@ def test_evaluation_all_piece_types():
 def test_move_response_includes_evaluation(client):
     """API response should include evaluation score"""
     from tests.test_routes_api import make_move, reset_board
-    from app import app
+    from app import create_app
+    from config import TestingConfig
     
+    app = create_app(TestingConfig)
+
     app.config['AI_ENABLED'] = False
     reset_board(client)
     
@@ -431,7 +434,10 @@ def test_move_response_includes_evaluation(client):
 def test_evaluation_changes_after_capture(client):
     """Evaluation should improve after capturing opponent's piece"""
     from tests.test_routes_api import make_move, reset_board
-    from app import app
+    from app import create_app
+    from config import TestingConfig
+    
+    app = create_app(TestingConfig)
     
     app.config['AI_ENABLED'] = False
     reset_board(client)
@@ -452,7 +458,10 @@ def test_evaluation_changes_after_capture(client):
 def test_evaluation_in_checkmate_position(client):
     """Evaluation should be extreme for checkmate"""
     from tests.test_routes_api import make_move, reset_board
-    from app import app
+    from app import create_app
+    from config import TestingConfig
+    
+    app = create_app(TestingConfig)
     
     app.config['AI_ENABLED'] = False
     reset_board(client)
@@ -473,7 +482,10 @@ def test_evaluation_in_checkmate_position(client):
 def test_material_and_evaluation_both_present(client):
     """Both material and evaluation should be in response"""
     from tests.test_routes_api import make_move, reset_board
-    from app import app
+    from app import create_app
+    from config import TestingConfig
+    
+    app = create_app(TestingConfig)
     
     app.config['AI_ENABLED'] = False
     reset_board(client)
@@ -493,7 +505,10 @@ def test_material_and_evaluation_both_present(client):
 def test_reset_clears_evaluation(client):
     """Reset should return evaluation to starting value"""
     from tests.test_routes_api import make_move, reset_board
-    from app import app
+    from app import create_app
+    from config import TestingConfig
+    
+    app = create_app(TestingConfig)
     
     app.config['AI_ENABLED'] = False
     
@@ -520,7 +535,10 @@ def test_reset_clears_evaluation(client):
 @pytest.fixture
 def client():
     """Flask test client for integration tests"""
-    from app import app
+    from app import create_app
+    from config import TestingConfig
+    
+    app = create_app(TestingConfig)
     
     app.config['TESTING'] = True
     app.config['AI_ENABLED'] = False
