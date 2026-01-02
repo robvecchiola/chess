@@ -3,14 +3,16 @@ Error Recovery Tests
 Tests graceful handling of edge cases and errors
 """
 import pytest
-import chess
 import json
-from app import app
+from app import create_app
+from config import TestingConfig
 from tests.test_routes_api import make_move, reset_board
+
+app = create_app(TestingConfig)
 
 @pytest.fixture
 def client():
-    app.config['TESTING'] = True
+    #app.config['TESTING'] = True
     app.config['AI_ENABLED'] = False
     with app.test_client() as client:
         yield client

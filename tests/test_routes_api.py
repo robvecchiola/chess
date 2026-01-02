@@ -1,9 +1,12 @@
 import pytest
 import json
 import chess
-from app import app
+from app import create_app
+from config import TestingConfig
 from constants import PIECE_VALUES
 from tests.helper import set_position  # make sure your Flask app is imported correctly
+
+app = create_app(TestingConfig)
 
 @pytest.fixture
 def client():

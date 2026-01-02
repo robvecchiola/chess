@@ -1,5 +1,4 @@
 import os
-import secrets
 
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 
@@ -13,6 +12,11 @@ class BaseConfig:
     SESSION_FILE_DIR = os.path.join(BASE_DIR, 'flask_session')
     SESSION_PERMANENT = False
     SESSION_USE_SIGNER = True
+
+    SQLALCHEMY_TRACK_MODIFICATIONS = False
+    SQLALCHEMY_ENGINE_OPTIONS = {
+        "pool_pre_ping": True
+    }
 
 class DevelopmentConfig(BaseConfig):
     DEBUG = True
@@ -29,12 +33,16 @@ class TestingConfig(BaseConfig):
     DEBUG = True
     TESTING = True
     SECRET_KEY = 'test-secret-key-for-testing-only'
+    SQLALCHEMY_DATABASE_URI = (
+        "mysql+pymysql://chess_tester:strongpassword@localhost/chess_app_test"
+    )
     
     # ⚡ Use cachelib for tests (in-memory but persists within process)
     # This is synchronous and reliable for E2E tests
     SESSION_TYPE = 'cachelib'
     SESSION_PERMANENT = False
     SESSION_USE_SIGNER = True
+    SESSION_FILE_DIR = None
 
 class ProductionConfig(BaseConfig):
     DEBUG = False

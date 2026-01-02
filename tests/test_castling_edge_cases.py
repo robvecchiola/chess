@@ -1,8 +1,11 @@
 import pytest
 import chess
-from app import app
+from app import create_app
+from config import TestingConfig
 from tests.helper import set_position
 from tests.test_routes_api import make_move, reset_board
+
+app = create_app(TestingConfig)
 
 @pytest.fixture
 def client():

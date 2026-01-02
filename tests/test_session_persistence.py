@@ -5,8 +5,11 @@ Critical tests for production deployment
 import pytest
 import chess
 import os
-from app import app
+from app import create_app
+from config import TestingConfig
 from tests.test_routes_api import make_move, reset_board
+
+app = create_app(TestingConfig)
 
 @pytest.fixture
 def client():

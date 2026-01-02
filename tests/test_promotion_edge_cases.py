@@ -4,8 +4,11 @@ Uses FEN-based setup to avoid complex move sequences
 """
 import pytest
 import chess
-from app import app
+from app import create_app
+from config import TestingConfig
 from tests.helper import make_move, set_position
+
+app = create_app(TestingConfig)
 
 @pytest.fixture
 def client():

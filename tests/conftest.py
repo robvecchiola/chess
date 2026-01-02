@@ -5,44 +5,46 @@ This file is automatically discovered by pytest and provides shared fixtures
 import pytest
 import threading
 import time
-from app import app as flask_app
 from config import TestingConfig
+from flask_migrate import upgrade
+from app import create_app
 
+@pytest.fixture(scope="session", autouse=True)
+
+def setup_test_db():
+    app = create_app(TestingConfig)
+
+    with app.app_context():
+        uri = app.config["SQLALCHEMY_DATABASE_URI"]
+        assert "test" in uri, f"Refusing to migrate non-test DB: {uri}"
+        upgrade()
+
+    yield
 
 @pytest.fixture(scope="session")
 def flask_server():
-    """
-    Start Flask server in background thread for E2E tests
-    Returns the base URL (e.g., http://localhost:5000)
-    """
-    # Configure Flask for testing - use TestingConfig for in-memory sessions
-    flask_app.config.from_object(TestingConfig)
-    flask_app.config['AI_ENABLED'] = True  # Enable AI for E2E tests
-    flask_app.config['DEBUG'] = False  # Disable debug mode in tests
-    
-    # Use a specific port for testing
+    flask_app = create_app(TestingConfig)
+    flask_app.config['AI_ENABLED'] = True
+    flask_app.config['DEBUG'] = False
+
     port = 5000
     base_url = f"http://localhost:{port}"
     
     # Start Flask in a background thread
     def run_server():
         flask_app.run(port=port, use_reloader=False, threaded=True)
-    
-    server_thread = threading.Thread(target=run_server, daemon=True)
-    server_thread.start()
-    
-    # Wait for server to be ready
-    max_retries = 10
-    for i in range(max_retries):
+
+    thread = threading.Thread(target=run_server, daemon=True)
+    thread.start()
+
+    for _ in range(10):
         try:
             import urllib.request
             urllib.request.urlopen(base_url, timeout=1)
             break
         except Exception:
-            if i == max_retries - 1:
-                raise RuntimeError("Flask server failed to start")
             time.sleep(0.5)
-    
+
     yield base_url
     
     # Server thread will be killed when test session ends (daemon=True)

@@ -1,30 +1,27 @@
 from flask import Flask
 from flask_session import Session
-from config import DevelopmentConfig
-from routes import register_routes
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
+from routes import register_routes
 
-app = Flask(__name__)
+db = SQLAlchemy()
+migrate = Migrate()
 
-# Load configuration
-app.config.from_object(DevelopmentConfig)
-print("DB URI:", app.config["SQLALCHEMY_DATABASE_URI"])
+def create_app(config_object):
+    app = Flask(__name__)
+    app.config.from_object(config_object)
 
+    db.init_app(app)
+    migrate.init_app(app, db)
 
-# Initialize SQLAlchemy
-db = SQLAlchemy(app)
-migrate = Migrate(app, db)
-import models
+    app.secret_key = app.config["SECRET_KEY"]
+    Session(app)
 
-# 🔑 Required for sessions
-app.secret_key = app.config['SECRET_KEY']
+    register_routes(app)
 
-# Initialize Flask-Session
-Session(app)
-
-# Register routes AFTER session setup
-register_routes(app)
+    return app
 
 if __name__ == "__main__":
-    app.run(debug=app.config['DEBUG'])
+    from config import DevelopmentConfig
+    app = create_app(DevelopmentConfig)
+    app.run(debug=app.config["DEBUG"])
