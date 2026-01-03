@@ -67,7 +67,7 @@ class ProductionConfig(BaseConfig):
     SECRET_KEY = os.environ.get("SECRET_KEY")
 
     # PythonAnywhere MySQL
-    SQLALCHEMY_DATABASE_URI = 'mysql+pymysql://casualchess:Bonestar1!@casualchess.mysql.pythonanywhere-services.com/casualchess$default$default?'
+    SQLALCHEMY_DATABASE_URI = 'mysql+pymysql://casualchess:Bonestar1!@casualchess.mysql.pythonanywhere-services.com/casualchess$default'
 
     # Sessions — filesystem works fine on PA
     SESSION_TYPE = "filesystem"
