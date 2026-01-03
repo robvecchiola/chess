@@ -29,7 +29,6 @@ class DevelopmentConfig(BaseConfig):
     "mysql+pymysql://chess_user:strongpassword@localhost/chess_app_dev"
 )
 
-
 class TestingConfig(BaseConfig):
     DEBUG = True
     TESTING = True
@@ -48,10 +47,9 @@ class TestingConfig(BaseConfig):
     # ✅ Explicitly configure cachelib to avoid runtime warning
     SESSION_CACHELIB = SimpleCache()
 
-
 class TestingConfigFilesystem(BaseConfig):
     """Testing config that uses filesystem sessions (for session file tests)"""
-    DEBUG = True
+    DEBUG = False
     TESTING = True
     SECRET_KEY = 'test-secret-key-for-testing-only'
     SQLALCHEMY_DATABASE_URI = (
@@ -64,8 +62,20 @@ class TestingConfigFilesystem(BaseConfig):
     SESSION_PERMANENT = False
     SESSION_USE_SIGNER = True
 
-
 class ProductionConfig(BaseConfig):
-    DEBUG = False
-    TESTING = False
-    # Add production-specific configs here, e.g., database URIs
+    # MUST be set in PythonAnywhere Web tab → Environment variables
+    SECRET_KEY = os.environ.get("SECRET_KEY")
+
+    # PythonAnywhere MySQL
+    SQLALCHEMY_DATABASE_URI = 'mysql+pymysql://casualchess:Bonestar1!@casualchess.mysql.pythonanywhere-services.com/casualchess$default$default?'
+
+    # Sessions — filesystem works fine on PA
+    SESSION_TYPE = "filesystem"
+    SESSION_PERMANENT = False
+    SESSION_USE_SIGNER = True
+
+    # Optional: reduce noise
+    SESSION_FILE_DIR = os.environ.get(
+        "SESSION_FILE_DIR",
+        os.path.join(BASE_DIR, "flask_session")
+    )
