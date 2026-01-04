@@ -425,3 +425,33 @@ body {
         font-size: 0.9rem;
     }
 }
+
+/* 📱 Mobile LANDSCAPE layout */
+@media (max-height: 500px) and (orientation: landscape) {
+
+    .chess-app {
+        grid-template-columns: 1fr 260px;
+        height: 100vh;
+        padding: 8px;
+        gap: 8px;
+        align-items: stretch;
+    }
+
+    .board-container {
+        justify-content: center;
+    }
+
+    #board {
+        width: min(96vh, 100%);
+        max-width: none;
+    }
+
+    .side-panel {
+        overflow-y: auto;
+        max-height: 100vh;
+    }
+
+    .app-title {
+        display: none; /* reclaim vertical space */
+    }
+}
