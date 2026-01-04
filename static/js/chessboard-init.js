@@ -422,4 +422,50 @@ $(document).ready(function () {
     window.addEventListener("resize", resizeBoardSafely);
     window.addEventListener("orientationchange", resizeBoardSafely);
 
+    // tap-to-move for mobile (server-authoritative)
+    let selectedSquare = null;
+
+    function onSquareTap(square) {
+
+        // First tap: select source
+        if (!selectedSquare) {
+
+            // Only allow selecting pieces if it's player's turn
+            if (currentTurn !== "white" || isGameOver) return;
+
+            selectedSquare = square;
+            highlightSquare(square);
+            return;
+        }
+
+        // Second tap: attempt move
+        clearHighlights();
+
+        // If tapping same square → cancel selection
+        if (square === selectedSquare) {
+            selectedSquare = null;
+            return;
+        }
+
+        sendMove(selectedSquare, square);
+        selectedSquare = null;
+    }
+
+    function highlightSquare(square) {
+        clearHighlights();
+        const el = document.querySelector(`.square-${square}`);
+        if (el) el.style.background = "rgba(37, 99, 235, 0.35)";
+    }
+
+    function clearHighlights() {
+        document.querySelectorAll(".square-55d63").forEach(s => {
+            s.style.background = "";
+        });
+    }
+
+    // Attach click handler
+    document.getElementById("board").addEventListener("click", (e) => {
+        const square = e.target.closest(".square-55d63")?.dataset.square;
+        if (square) onSquareTap(square);
+    });
 });

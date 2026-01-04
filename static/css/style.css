@@ -378,9 +378,8 @@ body {
 /* mobile adjustments for cobile */
 @media (max-width: 768px) {
 
-    .h1.app-title {
-        font-size: 1.5rem;
-        margin: 15px 0 8px;
+    .app-title {
+        display: none;
     }
 
     #board {
