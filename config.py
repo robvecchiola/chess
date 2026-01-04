@@ -63,6 +63,10 @@ class TestingConfigFilesystem(BaseConfig):
     SESSION_USE_SIGNER = True
 
 class ProductionConfig(BaseConfig):
+    SESSION_COOKIE_SECURE = True
+    SESSION_COOKIE_HTTPONLY = True
+    SESSION_COOKIE_SAMESITE = "Lax"
+
     # MUST be set in PythonAnywhere Web tab → Environment variables
     SECRET_KEY = os.environ.get("SECRET_KEY")
 

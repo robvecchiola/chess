@@ -405,4 +405,21 @@ $(document).ready(function () {
             return "Black Slightly Better";
         }
     }
+
+    // Handle window resize fore responsiveness
+
+    let resizeTimeout;
+
+    function resizeBoardSafely() {
+        clearTimeout(resizeTimeout);
+        resizeTimeout = setTimeout(() => {
+            if (board) {
+                board.resize();
+            }
+        }, 250); // mobile browsers need time to settle layout
+    }
+
+    window.addEventListener("resize", resizeBoardSafely);
+    window.addEventListener("orientationchange", resizeBoardSafely);
+
 });

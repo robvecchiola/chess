@@ -5,6 +5,7 @@ body {
     font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     background: #f4f6f8;
     color: #222;
+    aspect-ratio: 1 / 1;
 }
 
 /* Title */
@@ -33,6 +34,7 @@ body {
 #board {
     width: 420px;
     max-width: 90vw;
+    touch-action: none;
 }
 
 .board-controls {
@@ -201,17 +203,6 @@ body {
     font-style: italic;
 }
 
-/* Mobile layout */
-@media (max-width: 768px) {
-    .chess-app {
-        grid-template-columns: 1fr;
-    }
-
-    #board {
-        width: 100%;
-    }
-}
-
 .captured-row {
     display: flex;
     flex-wrap: wrap;
@@ -326,6 +317,7 @@ body {
     cursor: help;
     font-size: 0.85em;
     color: #666;
+    pointer-events: auto;
 }
 
 .tooltip-text {
@@ -366,6 +358,11 @@ body {
     opacity: 1;
 }
 
+.tooltip-icon:active .tooltip-text {
+    visibility: visible;
+    opacity: 1;
+}
+
 /* Position summary rows */
 .position-row {
     display: flex;
@@ -376,4 +373,55 @@ body {
 
 .position-row .label {
     font-weight: 600;
+}
+
+/* mobile adjustments for cobile */
+@media (max-width: 768px) {
+
+    .h1.app-title {
+        font-size: 1.5rem;
+        margin: 15px 0 8px;
+    }
+
+    #board {
+        width: min(92vw, 92vh);
+        max-width: 420px;
+    }
+
+    .chess-app {
+        padding: 10px;
+        gap: 12px;
+        grid-template-columns: 1fr;
+        align-items: start;
+    }
+
+    .side-panel {
+        order: 2;
+    }
+
+    .board-container {
+        order: 1;
+    }
+
+    .card.move-history-card {
+        max-height: none;
+    }
+
+    #reset-btn {
+        width: 100%;
+        font-size: 1.1rem;
+        padding: 14px;
+    }
+
+    .card {
+        padding: 10px;
+    }
+
+    .card h3 {
+        font-size: 0.95rem;
+    }
+
+    .position-row {
+        font-size: 0.9rem;
+    }
 }
