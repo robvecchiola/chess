@@ -427,21 +427,26 @@ $(document).ready(function () {
 
     function onSquareTap(square) {
 
-        // First tap: select source
+        if (currentTurn !== "white" || isGameOver) return;
+
+        const position = board.position();
+        const piece = position[square];
+
+        // FIRST TAP — select piece
         if (!selectedSquare) {
 
-            // Only allow selecting pieces if it's player's turn
-            if (currentTurn !== "white" || isGameOver) return;
+            // Must tap a white piece
+            if (!piece || !piece.startsWith("w")) return;
 
             selectedSquare = square;
             highlightSquare(square);
             return;
         }
 
-        // Second tap: attempt move
+        // SECOND TAP — attempt move
         clearHighlights();
 
-        // If tapping same square → cancel selection
+        // Cancel if same square tapped
         if (square === selectedSquare) {
             selectedSquare = null;
             return;
@@ -453,19 +458,20 @@ $(document).ready(function () {
 
     function highlightSquare(square) {
         clearHighlights();
-        const el = document.querySelector(`.square-${square}`);
+        const el = document.querySelector(`[data-square="${square}"]`);
         if (el) el.style.background = "rgba(37, 99, 235, 0.35)";
     }
 
     function clearHighlights() {
-        document.querySelectorAll(".square-55d63").forEach(s => {
-            s.style.background = "";
+        document.querySelectorAll("[data-square]").forEach(el => {
+            el.style.background = "";
         });
     }
 
-    // Attach click handler
+    // Attach handler (robust)
     document.getElementById("board").addEventListener("click", (e) => {
-        const square = e.target.closest(".square-55d63")?.dataset.square;
-        if (square) onSquareTap(square);
+        const squareEl = e.target.closest("[data-square]");
+        if (!squareEl) return;
+        onSquareTap(squareEl.dataset.square);
     });
 });
