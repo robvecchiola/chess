@@ -82,6 +82,17 @@ def setup_board_position(page: Page, fen: str, move_history=None,
             
             const statusEl = document.getElementById('game-status');
             if (statusEl) statusEl.textContent = status;
+            
+            // Update material and evaluation if provided
+            if (data.material !== undefined) {
+                updateMaterialAdvantage(data.material);
+            }
+            if (data.evaluation !== undefined) {
+                updatePositionEvaluation(data.evaluation);
+            }
+            if (data.special_moves) {
+                updateSpecialMove(data.special_moves);
+            }
         }
         """,
         response_json

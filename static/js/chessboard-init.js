@@ -3,8 +3,9 @@ $(document).ready(function () {
     let board;
     let pendingPromotion = null;
     let lastPosition = null;   // NEW - always store before move
-    let currentTurn = 'white';  // Track whose turn it is
+    let currentTurn = window.initialTurn || 'white';  // Track whose turn it is
     let isGameOver = false;     // Track if game is over
+    let aiThinking = false;     // Track if AI is currently thinking
 
     // Use initial position from backend, fallback to 'start'
     let initialPosition = window.initialFen || 'start';
@@ -18,9 +19,9 @@ $(document).ready(function () {
             // snapshot BEFORE illegal moves
             lastPosition = board.position();
 
-            // Prevent dragging if game over or opponent's pieces
+            // Prevent dragging if game over, AI is thinking, or opponent's pieces
             const pieceColor = piece.startsWith('w') ? 'white' : 'black';
-            if (isGameOver || pieceColor !== currentTurn) {
+            if (isGameOver || aiThinking || pieceColor !== currentTurn) {
                 return false;  // Prevent drag
             }
         },
@@ -53,6 +54,39 @@ $(document).ready(function () {
     // Make board available globally for testing
     window.board = board;
 
+    // Initialize UI with backend values
+    updateSpecialMove(window.initialSpecialMoves || []);
+    updateMoveHistory(window.initialMoveHistory || []);
+    updateCaptured(window.initialCapturedPieces || { white: [], black: [] });
+    updateMaterialAdvantage(window.initialMaterial || 0);
+    updatePositionEvaluation(window.initialEvaluation || 0);
+
+    // If it's AI's turn on page load, trigger AI move
+    if (currentTurn === 'black' && window.aiEnabled && !isGameOver) {
+        aiThinking = true;  // Set AI thinking flag
+        board.draggable = false;
+        $.post("/ai-move", function(aiResponse) {
+            aiThinking = false;  // Clear AI thinking flag
+            board.draggable = true;
+            board.position(aiResponse.fen);
+            currentTurn = aiResponse.turn;
+            updateCaptured(aiResponse.captured_pieces);
+            updateMaterialAdvantage(aiResponse.material);
+            updatePositionEvaluation(aiResponse.evaluation);
+            updateMoveHistory(aiResponse.move_history);
+            updateStatus(
+                aiResponse.turn,
+                aiResponse.check,
+                aiResponse.checkmate,
+                aiResponse.stalemate,
+                false,
+                false,
+                false,
+                aiResponse.game_over
+            );
+        });
+    }
+
     // Send move to server
     function sendMove(source, target, promotionPiece=null) {
 
@@ -73,8 +107,7 @@ $(document).ready(function () {
 
             success: function (response) {
 
-                board.draggable = true;  // Re-enable dragging
-
+                // Handle response based on outcome
                 if (response.status === "ok") {
 
                     pendingPromotion = null;
@@ -90,8 +123,40 @@ $(document).ready(function () {
                     updatePositionEvaluation(response.evaluation);
                     updateErrorMessage("");  // Clear any previous error
 
+                    // If it's now black's turn, trigger AI move
+                    if (response.turn === "black" && !response.game_over) {
+                        // Keep aiThinking = true, board.draggable = false
+                        $.post("/ai-move", function(aiResponse) {
+                            aiThinking = false;  // Clear AI thinking flag
+                            board.draggable = true;  // Re-enable dragging after AI move
+                            board.position(aiResponse.fen);
+                            currentTurn = aiResponse.turn;
+                            updateCaptured(aiResponse.captured_pieces);
+                            updateMaterialAdvantage(aiResponse.material);
+                            updatePositionEvaluation(aiResponse.evaluation);
+                            updateMoveHistory(aiResponse.move_history);
+                            updateStatus(
+                                aiResponse.turn,
+                                aiResponse.check,
+                                aiResponse.checkmate,
+                                aiResponse.stalemate,
+                                false,
+                                false,
+                                false,
+                                aiResponse.game_over
+                            );
+                        });
+                    } else {
+                        // It's still player's turn or game over, re-enable interaction
+                        aiThinking = false;
+                        board.draggable = true;
+                    }
+
                 } else {
 
+                    // Illegal move - re-enable interaction
+                    aiThinking = false;
+                    board.draggable = true;
                     rollbackPosition();   // unified rollback
                     // 🔧 FIX: Use server's detailed error message if available
                     const errorMsg = response.message || "Illegal move!";
@@ -102,7 +167,9 @@ $(document).ready(function () {
             },
 
             error: function(xhr) {
-                board.draggable = true;  // Re-enable dragging
+                // Error - re-enable interaction
+                aiThinking = false;
+                board.draggable = true;
                 rollbackPosition();
                 // 🔧 FIX: Extract error message from server response
                 const errorMsg = xhr.responseJSON && xhr.responseJSON.message 
@@ -113,6 +180,10 @@ $(document).ready(function () {
                 updateStatus(currentTurn, false, false, false, false, false, false, false);
             }
         });
+
+        // Immediately disable interaction after sending move request
+        aiThinking = true;
+        board.draggable = false;
     }
 
     // Make sendMove available globally for testing
@@ -286,6 +357,9 @@ $(document).ready(function () {
         });
     }
 
+    // Make updateSpecialMove available globally for testing
+    window.updateSpecialMove = updateSpecialMove;
+
     function updateErrorMessage(message) {
         $("#error-message").text(message);
     }
@@ -374,6 +448,9 @@ $(document).ready(function () {
         }
     }
 
+    // Make updateMaterialAdvantage available globally for testing
+    window.updateMaterialAdvantage = updateMaterialAdvantage;
+
     function updatePositionEvaluation(evalCp) {
         const el = $("#position-eval");
 
@@ -387,6 +464,9 @@ $(document).ready(function () {
 
         el.text(`${pawns} (${label})`);
     }
+
+    // Make updatePositionEvaluation available globally for testing
+    window.updatePositionEvaluation = updatePositionEvaluation;
 
     function formatEvaluation(evalCp) {
         const abs = Math.abs(evalCp);
@@ -427,7 +507,7 @@ $(document).ready(function () {
 
     function onSquareTap(square) {
 
-        if (currentTurn !== "white" || isGameOver) return;
+        if (currentTurn !== "white" || isGameOver || aiThinking) return;
 
         const position = board.position();
         const piece = position[square];

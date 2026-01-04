@@ -102,34 +102,36 @@ def test_ai_responds_immediately(client):
     reset_board(client)
     rv = make_move(client, "e2", "e4")
     assert rv["status"] == "ok"
-    # AI should have moved (turn should be white again)
-    assert rv["turn"] == "white"
+    # AI should respond via separate call
+    ai_rv = client.post("/ai-move").get_json()
+    assert ai_rv["status"] == "ok"
+    # Now turn should be white again
+    assert ai_rv["turn"] == "white"
     # Move history should have 2 moves
-    assert len(rv["move_history"]) == 2
+    assert len(ai_rv["move_history"]) == 2
 
 def test_ai_capture_tracking(client):
     app.config['AI_ENABLED'] = True
     reset_board(client)
     # Set up a position where AI is likely to capture
     # Place a black piece where white can easily capture it
-    make_move(client, "e2", "e4")
-    # AI makes a move (random)
-    # We need to verify that if AI captures, it's tracked
-    # This is probabilistic, so we'll do multiple moves and check if any captures are tracked
-    for _ in range(10):
-        rv = make_move(client, "d2", "d4")
-        if rv["status"] != "ok":
-            break
-        # Check if AI made a capture
-        if len(rv["captured_pieces"]["black"]) > 0:
-            # AI (black) captured a white piece
-            assert "captured_pieces" in rv
-            assert isinstance(rv["captured_pieces"]["black"], list)
-            break
-        # Try another move
-        rv2 = make_move(client, "d4", "d3")
-        if rv2["status"] != "ok":
-            break
+    rv = make_move(client, "e2", "e4")
+    assert rv["status"] == "ok"
+    # AI makes a move
+    ai_rv = client.post("/ai-move").get_json()
+    assert ai_rv["status"] == "ok"
+    # Check if AI captured anything
+    if len(ai_rv["captured_pieces"]["black"]) > 0:
+        # AI (black) captured a white piece
+        assert "captured_pieces" in ai_rv
+        assert isinstance(ai_rv["captured_pieces"]["black"], list)
+    # Make another move and check again
+    rv2 = make_move(client, "d2", "d4")
+    if rv2["status"] == "ok":
+        ai_rv2 = client.post("/ai-move").get_json()
+        if len(ai_rv2["captured_pieces"]["black"]) > 0:
+            assert "captured_pieces" in ai_rv2
+            assert isinstance(ai_rv2["captured_pieces"]["black"], list)
 
 def test_ai_chooses_best_move():
     """Test that AI chooses a reasonable move (capture when available)"""
@@ -266,8 +268,11 @@ def test_ai_promotion_limitation(client):
     # For now, just verify AI can make moves without errors
     rv = make_move(client, "e2", "e4")
     assert rv["status"] == "ok"
-    # AI should have responded
-    assert len(rv["move_history"]) == 2
+    # AI should have responded via separate call
+    ai_rv = client.post("/ai-move").get_json()
+    assert ai_rv["status"] == "ok"
+    # Now move history should have 2 moves
+    assert len(ai_rv["move_history"]) == 2
 
 def test_ai_handles_promotion_scenario(client):
     """Test what happens when AI needs to promote"""
@@ -313,7 +318,10 @@ def test_ai_move_is_not_random(client):
     # AI should capture the queen (or make best defensive move)
     # At minimum, verify AI didn't crash and made a legal move
     assert rv["status"] == "ok"
-    board = chess.Board(rv["fen"])
+    # Trigger AI move
+    ai_rv = client.post("/ai-move").get_json()
+    assert ai_rv["status"] == "ok"
+    board = chess.Board(ai_rv["fen"])
     assert board.turn == chess.WHITE  # AI completed its turn
 
 def test_ai_forced_to_promote(client):

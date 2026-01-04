@@ -3,7 +3,7 @@ import chess
 import random
 
 from ai import choose_ai_move, material_score, evaluate_board
-from helpers import explain_illegal_move, get_game_state, init_game, save_game_state
+from helpers import explain_illegal_move, get_game_state, init_game, save_game_state, execute_move
 
 # -------------------------------------------------------------------
 # Routes
@@ -44,9 +44,28 @@ def register_routes(app):
         elif board.is_check():
             status = "Check!"
         else:
-            status = "White's turn" if board.turn == chess.WHITE else "Black's turn"
+            if board.turn == chess.WHITE:
+                status = "White's turn"
+            else:
+                # Black's turn
+                if app.config.get('AI_ENABLED', False):
+                    status = "AI is thinking..."
+                else:
+                    status = "Black's turn"
         
-        return render_template("chess.html", initial_position=initial_position, status=status)
+        material = material_score(board)
+        evaluation = evaluate_board(board)
+        
+        return render_template("chess.html", 
+                             initial_position=initial_position, 
+                             status=status,
+                             initial_material=material,
+                             initial_evaluation=evaluation,
+                             initial_move_history=move_history,
+                             initial_captured_pieces=captured_pieces,
+                             initial_special_moves=special_moves,
+                             initial_turn="white" if board.turn == chess.WHITE else "black",
+                             ai_enabled=app.config.get('AI_ENABLED', False))
 
 
     @app.route("/move", methods=["POST"])
@@ -94,100 +113,10 @@ def register_routes(app):
             
             print("Move is LEGAL, executing...")
             
-            # Detect special move
-            special_move = None
-            if board.is_castling(move):
-                special_move = "Castling"
-                print("   Special: Castling")
-            elif board.is_en_passant(move):
-                special_move = "En Passant"
-                print("   Special: En Passant")
-            elif promotion:
-                special_move = f"Promotion to {promotion.upper()}"
-                print(f"   Special: Promotion to {promotion.upper()}")
-            
-            # SAN before push
-            move_san = board.san(move)
-            print(f"   SAN notation: {move_san}")
-
-            # Track player capture
-            if board.is_capture(move):
-                if board.is_en_passant(move):
-                    captured_piece = chess.Piece(chess.PAWN, not board.turn)
-                else:
-                    captured_piece = board.piece_at(move.to_square)
-
-                if captured_piece:
-                    # Store by capturing player: white piece captured → black captured it
-                    color_key = "black" if captured_piece.color == chess.WHITE else "white"
-                    captured_pieces[color_key].append(captured_piece.symbol())
-                    print(f"   Player captured: {captured_piece.symbol()}")
-
-            board.push(move)
-            move_history.append(move_san)
-
-            if special_move:
-                special_moves.append(special_move)
+            # Execute the move
+            execute_move(board, move, move_history, captured_pieces, special_moves)
 
             print(f"Board after player move: {board.fen()}")
-
-            # -----------------------------------------------------------
-            # AI Move
-            # -----------------------------------------------------------
-            if app.config.get("AI_ENABLED", True) and not board.is_game_over():
-                print("\nAI MOVE:")
-                try:
-                    ai_move = choose_ai_move(board, depth=2)
-                    if ai_move is None:
-                        print("   WARNING: AI returned None, using random move")
-                        ai_move = random.choice(list(board.legal_moves))
-                        print(f"   Random move: {ai_move.uci()}")
-                except Exception as e:
-                    print(f"   ERROR in AI: {e}")
-                    ai_move = random.choice(list(board.legal_moves))
-                    print(f"   Fallback random move: {ai_move.uci()}")
-                
-                ai_special_move = None
-                if board.is_castling(ai_move):
-                    ai_special_move = "Castling"
-                    print("   AI Special: Castling")
-                elif board.is_en_passant(ai_move):
-                    ai_special_move = "En Passant"
-                    print("   AI Special: En Passant")
-                
-                ai_san = board.san(ai_move)
-                print(f"   AI SAN: {ai_san}")
-
-                if board.is_capture(ai_move):
-                    if board.is_en_passant(ai_move):
-                        captured_piece = chess.Piece(chess.PAWN, not board.turn)
-                    else:
-                        captured_piece = board.piece_at(ai_move.to_square)
-
-                    if captured_piece:
-                        # Store by capturing player: white piece captured → black captured it
-                        color_key = "black" if captured_piece.color == chess.WHITE else "white"
-                        captured_pieces[color_key].append(captured_piece.symbol())
-                        print(f"   AI captured: {captured_piece.symbol()}")
-                
-                # --- FORCE AI PROMOTION SAFETY NET ---
-                if (
-                    board.piece_at(ai_move.from_square)
-                    and board.piece_at(ai_move.from_square).piece_type == chess.PAWN
-                    and chess.square_rank(ai_move.to_square) in (0, 7)
-                    and ai_move.promotion is None
-                ):
-                    ai_move = chess.Move(
-                        ai_move.from_square,
-                        ai_move.to_square,
-                        promotion=chess.QUEEN
-                    )
-                    ai_special_move = "Promotion to Q"
-
-                board.push(ai_move)
-                move_history.append(ai_san)
-                if ai_special_move:
-                    special_moves.append(ai_special_move)
 
             # Clear test position flag if it was set (after first move)
             session.pop('_test_position_set', None)
@@ -205,7 +134,7 @@ def register_routes(app):
             print(f"evaluation score: {evaluation}")
             print("--- END DEBUG ---\n")
 
-            return jsonify({
+            response_data = {
                 "status": "ok",
                 "special_moves": special_moves,
                 "fen": board.fen(),
@@ -221,7 +150,9 @@ def register_routes(app):
                 "captured_pieces": captured_pieces,
                 "material": material,
                 "evaluation": evaluation
-            })
+            }
+
+            return jsonify(response_data)
 
         except Exception as e:
             print("\nEXCEPTION IN /move ENDPOINT")
@@ -232,8 +163,69 @@ def register_routes(app):
                 "status": "illegal", 
                 "message": str(e), 
                 "material": material_score(board),
+                "evaluation": evaluate_board(board),
+                "fen": board.fen(),
+                "turn": "white" if board.turn == chess.WHITE else "black",
+                "check": board.is_check(),
+                "checkmate": board.is_checkmate(),
+                "stalemate": board.is_stalemate(),
+                "fifty_moves": board.is_fifty_moves(),
+                "repetition": board.is_repetition(),
+                "insufficient_material": board.is_insufficient_material(),
+                "game_over": board.is_game_over(),
+                "move_history": move_history,
+                "captured_pieces": captured_pieces,
+                "special_moves": special_moves
+            })
+
+    # ai move route
+    @app.route("/ai-move", methods=["POST"])
+    def ai_move():
+        board, move_history, captured_pieces, special_moves = get_game_state()
+
+        # Only move if game still active
+        if board.is_game_over():
+            return jsonify({
+                "status": "ok",
+                "fen": board.fen(),
+                "turn": "white" if board.turn == chess.WHITE else "black",
+                "game_over": True,
+                "move_history": move_history,
+                "captured_pieces": captured_pieces,
+                "material": material_score(board),
                 "evaluation": evaluate_board(board)
             })
+
+        print("\nAI MOVE:")
+        try:
+            ai_move = choose_ai_move(board, depth=2)
+            if ai_move is None:
+                print("   WARNING: AI returned None, using random move")
+                ai_move = random.choice(list(board.legal_moves))
+                print(f"   Random move: {ai_move.uci()}")
+        except Exception as e:
+            print(f"   ERROR in AI: {e}")
+            ai_move = random.choice(list(board.legal_moves))
+            print(f"   Fallback random move: {ai_move.uci()}")
+        
+        # Execute the AI move
+        execute_move(board, ai_move, move_history, captured_pieces, special_moves, is_ai=True)
+
+        save_game_state(board, move_history, captured_pieces, special_moves)
+
+        return jsonify({
+            "status": "ok",
+            "fen": board.fen(),
+            "turn": "white" if board.turn == chess.WHITE else "black",
+            "check": board.is_check(),
+            "checkmate": board.is_checkmate(),
+            "stalemate": board.is_stalemate(),
+            "game_over": board.is_game_over(),
+            "move_history": move_history,
+            "captured_pieces": captured_pieces,
+            "material": material_score(board),
+            "evaluation": evaluate_board(board)
+        })
 
 
     @app.route("/reset", methods=["POST"])

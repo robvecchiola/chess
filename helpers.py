@@ -53,6 +53,56 @@ def save_game_state(board, move_history, captured_pieces, special_moves):
     session['captured_pieces'] = captured_pieces
     session['special_moves'] = special_moves
 
+
+def execute_move(board, move, move_history, captured_pieces, special_moves, is_ai=False):
+    """
+    Execute a move on the board, updating history, captures, and special moves.
+    For AI moves, apply promotion safety net if needed.
+    """
+    # Detect special move
+    special_move = None
+    if board.is_castling(move):
+        special_move = "Castling"
+    elif board.is_en_passant(move):
+        special_move = "En Passant"
+    elif move.promotion:
+        special_move = f"Promotion to {chess.piece_symbol(move.promotion).upper()}"
+    
+    # SAN before push
+    move_san = board.san(move)
+
+    # Track capture
+    if board.is_capture(move):
+        if board.is_en_passant(move):
+            captured_piece = chess.Piece(chess.PAWN, not board.turn)
+        else:
+            captured_piece = board.piece_at(move.to_square)
+
+        if captured_piece:
+            # Store by capturing player: white piece captured → black captured it
+            color_key = "black" if captured_piece.color == chess.WHITE else "white"
+            captured_pieces[color_key].append(captured_piece.symbol())
+
+    # For AI: Force promotion if pawn reaches last rank without promotion
+    if is_ai and (
+        board.piece_at(move.from_square)
+        and board.piece_at(move.from_square).piece_type == chess.PAWN
+        and chess.square_rank(move.to_square) in (0, 7)
+        and move.promotion is None
+    ):
+        move = chess.Move(
+            move.from_square,
+            move.to_square,
+            promotion=chess.QUEEN
+        )
+        special_move = "Promotion to Q"
+
+    board.push(move)
+    move_history.append(move_san)
+    if special_move:
+        special_moves.append(special_move)
+
+
 ## illegal moves helper
 
 def explain_illegal_move(board, move):
