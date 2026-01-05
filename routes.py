@@ -304,6 +304,6 @@ def register_routes(app):
             "checkmate": board.is_checkmate(),
             "stalemate": board.is_stalemate(),
             "game_over": board.is_game_over(),
-            "material":0,
+            "material": material_score(board),
             "evaluation": evaluate_board(board)
         })
