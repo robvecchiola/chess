@@ -105,11 +105,11 @@
     <script>
         // Pass initial values from backend to JavaScript
         window.initialFen = '{{ initial_position }}';
-        window.initialMaterial = '{{ initial_material | default(0) }}';
-        window.initialEvaluation = '{{ initial_evaluation | default(0) }}';
-        window.initialMoveHistory = '{{ initial_move_history | tojson }}';
-        window.initialCapturedPieces = '{{ initial_captured_pieces | tojson }}';
-        window.initialSpecialMoves = '{{ initial_special_moves | tojson }}';
+        window.initialMaterial = {{ initial_material | default(0) }};
+        window.initialEvaluation = {{ initial_evaluation | default(0) }};
+        window.initialMoveHistory = {{ initial_move_history | tojson }};
+        window.initialCapturedPieces = {{ initial_captured_pieces | tojson }};
+        window.initialSpecialMoves = {{ initial_special_moves | tojson }};
         window.initialTurn = '{{ initial_turn }}';
         window.aiEnabled = '{{ ai_enabled | lower }}';
     </script>

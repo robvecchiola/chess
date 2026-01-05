@@ -58,8 +58,8 @@ $(document).ready(function () {
     updateSpecialMove(window.initialSpecialMoves || []);
     updateMoveHistory(window.initialMoveHistory || []);
     updateCaptured(window.initialCapturedPieces || { white: [], black: [] });
-    updateMaterialAdvantage(window.initialMaterial || 0);
-    updatePositionEvaluation(window.initialEvaluation || 0);
+    updateMaterialAdvantage(Number(window.initialMaterial) || 0);
+    updatePositionEvaluation(Number(window.initialEvaluation) || 0);
 
     // If it's AI's turn on page load, trigger AI move
     if (currentTurn === 'black' && window.aiEnabled && !isGameOver) {
