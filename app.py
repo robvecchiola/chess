@@ -1,13 +1,9 @@
 import os
 from flask import Flask
 from flask_session import Session
-from flask_sqlalchemy import SQLAlchemy
+from extensions import db
 from flask_migrate import Migrate
 from routes import register_routes
-
-db = SQLAlchemy()
-migrate = Migrate()
-
 
 def create_app(config_object=None):
     app = Flask(__name__)
@@ -33,7 +29,7 @@ def create_app(config_object=None):
     # Extensions
     # -------------------------------------------------
     db.init_app(app)
-    migrate.init_app(app, db)
+    Migrate(app, db)
 
     app.secret_key = app.config["SECRET_KEY"]
     Session(app)

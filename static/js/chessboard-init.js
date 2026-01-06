@@ -554,4 +554,32 @@ $(document).ready(function () {
         if (!squareEl) return;
         onSquareTap(squareEl.dataset.square);
     });
+
+    //resign
+    $("#resign-btn").click(function () {
+        $.ajax({
+            url: "/resign",
+            type: "POST",
+            contentType: "application/json",
+            data: JSON.stringify({ color: currentTurn }),
+            success: function (response) {
+                if (response.status === "ok") {
+                    updateStatus(
+                        null,
+                        false,
+                        false,
+                        false,
+                        false,
+                        false,
+                        false,
+                        true
+                    );
+
+                    $("#game-status").text(
+                        `${response.winner.charAt(0).toUpperCase() + response.winner.slice(1)} wins — resignation`
+                    );
+                }
+            }
+        });
+    });
 });

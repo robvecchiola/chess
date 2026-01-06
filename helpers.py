@@ -1,11 +1,20 @@
 from flask import session
+from extensions import db
 import chess
+
+from models import Game
 # -------------------------------------------------------------------
 # Session Helpers
 # -------------------------------------------------------------------
 
 def init_game():
-    session['fen'] = chess.STARTING_FEN
+    board = chess.Board()
+    game = Game(ai_enabled=True)
+    db.session.add(game)
+    db.session.commit()
+
+    session["game_id"] = game.id
+    session['fen'] = board.fen()
     session['move_history'] = []
     session['captured_pieces'] = {'white': [], 'black': []}
     session['special_moves'] = []
@@ -257,3 +266,39 @@ def explain_illegal_move(board, move):
     
     # 8. Generic fallback
     return "That's not a legal move in this position."
+
+
+def finalize_game(game, result, reason):
+    game.result = result
+    game.termination_reason = reason
+    game.ended_at = db.func.now()
+    db.session.commit()
+
+def finalize_game_if_over(board, game):
+    """
+    Finalizes the game if the board is in a game-over state.
+    Returns True if the game was finalized, False otherwise.
+    """
+    if not board.is_game_over():
+        return False
+
+    if board.is_checkmate():
+        # board.turn is the LOSER after checkmate
+        winner = "white" if board.turn == chess.BLACK else "black"
+        result = "1-0" if winner == "white" else "0-1"
+        reason = "checkmate"
+
+    elif board.is_stalemate():
+        result = "1/2-1/2"
+        reason = "stalemate"
+
+    elif board.is_insufficient_material():
+        result = "1/2-1/2"
+        reason = "insufficient_material"
+
+    else:
+        result = "1/2-1/2"
+        reason = "draw"
+
+    finalize_game(game, result, reason)
+    return True

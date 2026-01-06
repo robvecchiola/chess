@@ -1,9 +1,10 @@
 from flask import render_template, request, jsonify, session
 import chess
 import random
+from models import Game, GameMove, db
 
 from ai import choose_ai_move, material_score, evaluate_board
-from helpers import explain_illegal_move, get_game_state, init_game, save_game_state, execute_move
+from helpers import explain_illegal_move, finalize_game, finalize_game_if_over, get_game_state, init_game, save_game_state, execute_move
 
 # -------------------------------------------------------------------
 # Routes
@@ -116,6 +117,23 @@ def register_routes(app):
             # Execute the move
             execute_move(board, move, move_history, captured_pieces, special_moves)
 
+            #add to the db
+            game_id = session.get("game_id")
+            game = db.session.get(Game, game_id) if game_id else None
+
+            if game:
+                db.session.add(GameMove(
+                    game_id=game_id,
+                    move_number=len(move_history),
+                    color="white",
+                    san=move_history[-1],
+                    uci=move.uci(),
+                    fen_after=board.fen()
+                ))
+                db.session.commit()
+            if game:
+                finalize_game_if_over(board, game)
+                
             print(f"Board after player move: {board.fen()}")
 
             # Clear test position flag if it was set (after first move)
@@ -211,6 +229,24 @@ def register_routes(app):
         # Execute the AI move
         execute_move(board, ai_move, move_history, captured_pieces, special_moves, is_ai=True)
 
+        # --- DB LOGGING (AI move) ---
+        game_id = session.get("game_id")
+        game = db.session.get(Game, game_id) if game_id else None
+        if game:
+            db.session.add(GameMove(
+                game_id=game_id,
+                move_number=len(move_history),
+                color="black",
+                san=move_history[-1],
+                uci=ai_move.uci(),
+                fen_after=board.fen()
+            ))
+            db.session.commit()
+        
+        if game:
+            finalize_game_if_over(board, game)
+        # --- END DB LOGGING ---
+
         save_game_state(board, move_history, captured_pieces, special_moves)
 
         return jsonify({
@@ -231,6 +267,11 @@ def register_routes(app):
     @app.route("/reset", methods=["POST"])
     def reset():
         print("\nRESET GAME")
+        game_id = session.get("game_id")
+        if game_id:
+            game = db.session.get(Game, game_id)
+            if game and game.ended_at is None:
+                finalize_game(game, "*", "abandoned")
         session.clear()  # This also clears _test_position_set flag
         init_game()
         print("--- END DEBUG ---\n")
@@ -253,6 +294,36 @@ def register_routes(app):
             "evaluation": 0
         })
     
+    @app.route("/resign", methods=["POST"])
+    def resign():
+        game_id = session.get("game_id")
+        if not game_id:
+            return jsonify({"status": "error", "message": "No active game"}), 400
+
+        game = db.session.get(Game, game_id)
+        if not game or game.ended_at:
+            return jsonify({"status": "error", "message": "Game already ended"}), 400
+
+        data = request.get_json()
+        resigning_color = data.get("color")  # "white" or "black"
+
+        if resigning_color not in ("white", "black"):
+            return jsonify({"status": "error", "message": "Invalid color"}), 400
+
+        winner = "black" if resigning_color == "white" else "white"
+        result = "1-0" if winner == "white" else "0-1"
+
+        finalize_game(game, result, "resignation")
+        db.session.commit()
+
+        return jsonify({
+            "status": "ok",
+            "result": result,
+            "winner": winner,
+            "termination_reason": "resignation",
+            "game_over": True
+        })
+
     @app.route("/test/set_position", methods=["POST"])
     def test_set_position():
         """
