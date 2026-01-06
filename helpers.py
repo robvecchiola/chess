@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from flask import session
 from extensions import db
 import chess
@@ -271,7 +272,7 @@ def explain_illegal_move(board, move):
 def finalize_game(game, result, reason):
     game.result = result
     game.termination_reason = reason
-    game.ended_at = db.func.now()
+    game.ended_at = datetime.now(timezone.utc)
     db.session.commit()
 
 def finalize_game_if_over(board, game):

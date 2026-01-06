@@ -1,11 +1,13 @@
 from datetime import datetime
+
+from sqlalchemy import func
 from extensions import db
 
 class Game(db.Model):
     __tablename__ = 'game'
 
     id = db.Column(db.Integer, primary_key=True)
-    started_at = db.Column(db.DateTime, default=datetime.utcnow)
+    started_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     ended_at = db.Column(db.DateTime, nullable=True)
 
     result = db.Column(db.String(20))  # "1-0", "0-1", "1/2-1/2"
@@ -29,4 +31,4 @@ class GameMove(db.Model):
 
     fen_after = db.Column(db.Text)
 
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
