@@ -9,7 +9,7 @@ class Game(db.Model):
     ended_at = db.Column(db.DateTime, nullable=True)
 
     result = db.Column(db.String(20))  # "1-0", "0-1", "1/2-1/2"
-    termination = db.Column(db.String(50))  # checkmate, stalemate, resign
+    termination_reason = db.Column(db.String(50))  # checkmate, stalemate, resign
 
     ai_enabled = db.Column(db.Boolean, default=True)
 
