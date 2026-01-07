@@ -578,6 +578,8 @@ $(document).ready(function () {
                     $("#game-status").text(
                         `${response.winner.charAt(0).toUpperCase() + response.winner.slice(1)} wins — resignation`
                     );
+                    isGameOver = true;
+                    board.draggable = false;
                 }
             }
         });

@@ -136,7 +136,7 @@ def test_handle_move_after_game_over(client):
     
     # Try another move
     rv = make_move(client, "e2", "e4")
-    assert rv["status"] == "illegal"
+    assert rv["status"] == "game_over"
 
 
 def test_handle_promotion_without_piece_specified(client):

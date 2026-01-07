@@ -280,7 +280,7 @@ def finalize_game_if_over(board, game):
     Finalizes the game if the board is in a game-over state.
     Returns True if the game was finalized, False otherwise.
     """
-    if not board.is_game_over():
+    if not (board.is_checkmate() or board.is_stalemate() or board.is_insufficient_material()):
         return False
 
     if board.is_checkmate():
@@ -303,3 +303,17 @@ def finalize_game_if_over(board, game):
 
     finalize_game(game, result, reason)
     return True
+
+def get_active_game_or_abort():
+    game_id = session.get("game_id")
+    if not game_id:
+        return None, None
+
+    game = db.session.get(Game, game_id)
+    if not game:
+        return None, None
+
+    if game.ended_at is not None:
+        return game, False
+
+    return game, True

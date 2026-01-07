@@ -196,11 +196,11 @@ def test_fifty_move_draw(client):
     moves = []
     for i in range(50):  # 100 half-moves
         if i % 2 == 0:
-            moves.append(("g1", "f3"))
-            moves.append(("g8", "f6"))
+            moves.append(("b1", "c3"))
+            moves.append(("b8", "c6"))
         else:
-            moves.append(("f3", "g1"))
-            moves.append(("f6", "g8"))
+            moves.append(("c3", "b1"))
+            moves.append(("c6", "b8"))
     for from_sq, to_sq in moves[:100]:  # Limit to 100 moves
         rv = make_move(client, from_sq, to_sq)
     assert rv["fifty_moves"] == True

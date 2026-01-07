@@ -4,7 +4,7 @@ import random
 from models import Game, GameMove, db
 
 from ai import choose_ai_move, material_score, evaluate_board
-from helpers import explain_illegal_move, finalize_game, finalize_game_if_over, get_game_state, init_game, save_game_state, execute_move
+from helpers import explain_illegal_move, finalize_game, finalize_game_if_over, get_active_game_or_abort, get_game_state, init_game, save_game_state, execute_move
 
 # -------------------------------------------------------------------
 # Routes
@@ -72,6 +72,28 @@ def register_routes(app):
     @app.route("/move", methods=["POST"])
     def move():
         board, move_history, captured_pieces, special_moves = get_game_state()
+        game, is_active = get_active_game_or_abort()
+
+        if game and not is_active:
+            return jsonify({
+                "status": "game_over",
+                "message": "This game has already ended.",
+                "result": game.result,
+                "termination_reason": game.termination_reason,
+                "fen": board.fen(),
+                "turn": "white" if board.turn == chess.WHITE else "black",
+                "check": board.is_check(),
+                "checkmate": board.is_checkmate(),
+                "stalemate": board.is_stalemate(),
+                "fifty_moves": board.is_fifty_moves(),
+                "repetition": board.is_repetition(),
+                "insufficient_material": board.is_insufficient_material(),
+                "game_over": True,
+                "move_history": move_history,
+                "captured_pieces": captured_pieces,
+                "material": material_score(board),
+                "evaluation": evaluate_board(board)
+            }), 400
 
         print("\n--- DEBUG: MOVE REQUEST ---")
         print("Session keys:", list(session.keys()))
@@ -163,7 +185,7 @@ def register_routes(app):
                 "fifty_moves": board.is_fifty_moves(),
                 "repetition": board.is_repetition(),
                 "insufficient_material": board.is_insufficient_material(),
-                "game_over": board.is_game_over(),
+                "game_over": board.is_checkmate() or board.is_stalemate() or board.is_insufficient_material() or board.is_fifty_moves(),
                 "move_history": move_history,
                 "captured_pieces": captured_pieces,
                 "material": material,
@@ -190,7 +212,7 @@ def register_routes(app):
                 "fifty_moves": board.is_fifty_moves(),
                 "repetition": board.is_repetition(),
                 "insufficient_material": board.is_insufficient_material(),
-                "game_over": board.is_game_over(),
+                "game_over": board.is_checkmate() or board.is_stalemate() or board.is_insufficient_material() or board.is_fifty_moves(),
                 "move_history": move_history,
                 "captured_pieces": captured_pieces,
                 "special_moves": special_moves
@@ -256,7 +278,10 @@ def register_routes(app):
             "check": board.is_check(),
             "checkmate": board.is_checkmate(),
             "stalemate": board.is_stalemate(),
-            "game_over": board.is_game_over(),
+            "fifty_moves": board.is_fifty_moves(),
+            "repetition": board.is_repetition(),
+            "insufficient_material": board.is_insufficient_material(),
+            "game_over": board.is_checkmate() or board.is_stalemate() or board.is_insufficient_material() or board.is_fifty_moves(),
             "move_history": move_history,
             "captured_pieces": captured_pieces,
             "material": material_score(board),
@@ -315,6 +340,11 @@ def register_routes(app):
 
         finalize_game(game, result, "resignation")
         db.session.commit()
+
+        session.pop("fen", None)
+        session.pop("move_history", None)
+        session.pop("captured_pieces", None)
+        session.pop("special_moves", None)
 
         return jsonify({
             "status": "ok",

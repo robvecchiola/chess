@@ -584,7 +584,7 @@ def test_move_rejected_after_checkmate(client):
     assert rv["checkmate"] == True
     # Try to make another move - should fail
     rv2 = make_move(client, "e2", "e4")
-    assert rv2["status"] == "illegal"
+    assert rv2["status"] == "game_over"
 
 def test_move_rejected_after_stalemate(client):
     app.config['AI_ENABLED'] = False
@@ -608,7 +608,7 @@ def test_move_rejected_after_stalemate(client):
     assert rv["stalemate"] == True
     # Try to make another move - should fail
     rv2 = make_move(client, "e6", "e7")
-    assert rv2["status"] == "illegal"
+    assert rv2["status"] == "game_over"
 
 # -------------------------------------------------------------------
 # Turn Enforcement Tests
@@ -847,17 +847,17 @@ def test_long_game_move_history(client):
     reset_board(client)
     # Make 50 moves (100 half-moves) moving knights back and forth
     for i in range(25):
-        make_move(client, "g1", "f3")
-        make_move(client, "g8", "f6")
-        make_move(client, "f3", "g1")
-        rv = make_move(client, "f6", "g8")
+        make_move(client, "b1", "c3")
+        make_move(client, "b8", "c6")
+        make_move(client, "c3", "b1")
+        rv = make_move(client, "c6", "b8")
     # Verify move history has 100 moves
     assert len(rv["move_history"]) == 100
     # Verify last few moves are correct
-    assert rv["move_history"][-4] == "Nf3"
-    assert rv["move_history"][-3] == "Nf6"
-    assert rv["move_history"][-2] == "Ng1"
-    assert rv["move_history"][-1] == "Ng8"
+    assert rv["move_history"][-4] == "Nc3"
+    assert rv["move_history"][-3] == "Nc6"
+    assert rv["move_history"][-2] == "Nb1"
+    assert rv["move_history"][-1] == "Nb8"
 
 # NEW TESTS TO ADD
 
@@ -891,28 +891,28 @@ def test_fifty_move_rule_resets_on_pawn_move(client):
     
     # Make 49 moves without pawn or capture
     for i in range(24):
-        make_move(client, "g1", "f3")
-        make_move(client, "g8", "f6")
-        make_move(client, "f3", "g1")
-        make_move(client, "f6", "g8")
+        make_move(client, "b1", "c3")
+        make_move(client, "b8", "c6")
+        make_move(client, "c3", "b1")
+        make_move(client, "c6", "b8")
     
     # One more knight move pair (98 moves total)
-    make_move(client, "g1", "f3")
-    rv = make_move(client, "g8", "f6")
+    make_move(client, "b1", "c3")
+    rv = make_move(client, "b8", "c6")
     assert rv["fifty_moves"] == False  # Not yet 100 half-moves
     
     # Now make pawn move - should reset counter
     make_move(client, "e2", "e4")
-    make_move(client, "f6", "g8")
+    make_move(client, "c6", "b8")
     
     # Make 49 more moves
     for i in range(24):
-        make_move(client, "f3", "g1")
-        make_move(client, "g8", "f6")
-        make_move(client, "g1", "f3")
-        make_move(client, "f6", "g8")
+        make_move(client, "c3", "b1")
+        make_move(client, "b8", "c6")
+        make_move(client, "b1", "c3")
+        make_move(client, "c6", "b8")
     
-    rv = make_move(client, "f3", "g1")
+    rv = make_move(client, "c3", "b1")
     # Should not trigger fifty-move because pawn move reset it
     assert rv["fifty_moves"] == False
 
@@ -937,13 +937,13 @@ def test_very_long_game_performance(client):
     
     # Make 100 move pairs (200 half-moves)
     for i in range(100):
-        rv1 = make_move(client, "g1", "f3")
+        rv1 = make_move(client, "b1", "c3")
         assert rv1["status"] == "ok", f"Failed at move {i*2}"
-        rv2 = make_move(client, "g8", "f6")
+        rv2 = make_move(client, "b8", "c6")
         assert rv2["status"] == "ok", f"Failed at move {i*2+1}"
-        rv3 = make_move(client, "f3", "g1")
+        rv3 = make_move(client, "c3", "b1")
         assert rv3["status"] == "ok"
-        rv4 = make_move(client, "f6", "g8")
+        rv4 = make_move(client, "c6", "b8")
         assert rv4["status"] == "ok"
     
     # Verify move history is complete
