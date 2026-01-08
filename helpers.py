@@ -31,29 +31,22 @@ def get_game_state():
         captured_pieces = {'white': [], 'black': []}
     special_moves = session.get('special_moves', [])
 
-    # For repetition detection, we need position history, so rebuild from moves
-    # when possible. Try to rebuild from moves first, fall back to FEN if it fails
-    # (which happens in test setups with custom FEN + relative move_history)
+    # Try to create board from FEN, fallback to starting position if invalid
+    try:
+        board = chess.Board(session.get('fen', chess.STARTING_FEN))
+    except ValueError:
+        board = chess.Board()
+
+    # Try to rebuild from move history for position history (repetition detection)
     if move_history:
         try:
-            board = chess.Board()
+            temp_board = chess.Board()
             for san in move_history:
-                board.push_san(san)
+                temp_board.push_san(san)
+            board = temp_board
         except Exception:
-            # Fallback: use FEN directly (test setup scenario)
-            try:
-                board = chess.Board(session.get('fen', chess.STARTING_FEN))
-            except ValueError:
-                # Invalid FEN, use starting position
-                board = chess.Board()
-    else:
-        # No move history: use FEN
-        try:
-            board = chess.Board(session.get('fen', chess.STARTING_FEN))
-        except ValueError:
-            # Invalid FEN, use starting position
-            board = chess.Board()
-    
+            pass  # Keep the board from FEN or starting position
+
     return board, move_history, captured_pieces, special_moves
 
 
@@ -270,6 +263,8 @@ def explain_illegal_move(board, move):
 
 
 def finalize_game(game, result, reason):
+    if game.ended_at is not None:
+        return 
     game.result = result
     game.termination_reason = reason
     game.ended_at = datetime.now(timezone.utc)
@@ -278,13 +273,11 @@ def finalize_game(game, result, reason):
 def finalize_game_if_over(board, game):
     """
     Finalizes the game if the board is in a game-over state.
-    Returns True if the game was finalized, False otherwise.
-    """
-    if not (board.is_checkmate() or board.is_stalemate() or board.is_insufficient_material()):
-        return False
+    Retrns True if the game was finalized, False otherwise.
+        """
 
     if board.is_checkmate():
-        # board.turn is the LOSER after checkmate
+         # board.turn is the LOSER after checkmate
         winner = "white" if board.turn == chess.BLACK else "black"
         result = "1-0" if winner == "white" else "0-1"
         reason = "checkmate"
@@ -297,13 +290,21 @@ def finalize_game_if_over(board, game):
         result = "1/2-1/2"
         reason = "insufficient_material"
 
-    else:
+    elif board.is_seventyfive_moves():
         result = "1/2-1/2"
-        reason = "draw"
+        reason = "draw_75_move_rule"
+
+    elif board.is_fivefold_repetition():
+        result = "1/2-1/2"
+        reason = "draw_fivefold_rule"
+
+    else:
+        return False
 
     finalize_game(game, result, reason)
     return True
 
+# Active Game Retrieval
 def get_active_game_or_abort():
     game_id = session.get("game_id")
     if not game_id:

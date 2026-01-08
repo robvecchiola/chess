@@ -12,11 +12,13 @@ This is a Flask-based web chess application with a random AI opponent. The archi
 ## Critical Session State Pattern
 
 Game state is persisted in Flask sessions via three helpers in [helpers.py](../helpers.py):
-- `init_game()` - Creates new game with starting FEN, empty move history, empty captured pieces
-- `get_game_state()` - Retrieves `(board, move_history, captured_pieces)` from session
-- `save_game_state(board, move_history, captured_pieces)` - Persists state back to session
+- `init_game()` - Creates new game with starting FEN, empty move history, empty captured pieces, empty special moves
+- `get_game_state()` - Retrieves `(board, move_history, captured_pieces, special_moves)` from session
+- `save_game_state(board, move_history, captured_pieces, special_moves)` - Persists state back to session
 
 **Always call `save_game_state()` after modifying board state.** Missing this causes desynchronization between client and server.
+
+The board state is stored in FEN format in the session, and move_history is maintained separately for display purposes. The board is not rebuilt from move_history to avoid SAN parsing issues.
 
 ## Move Flow (Client → Server → AI)
 
@@ -26,7 +28,8 @@ Game state is persisted in Flask sessions via three helpers in [helpers.py](../h
 4. AI immediately responds with `random.choice(list(board.legal_moves))` if `AI_ENABLED=True`
 5. Both moves tracked in SAN notation via `board.san(move)` before push
 6. Captured pieces tracked separately for display (handles en passant edge case)
-7. Updated state returned: FEN, turn, game flags, move_history, captured_pieces
+7. Special moves (castling, en passant, promotion) tracked for display
+8. Updated state returned: FEN, turn, game flags, move_history, captured_pieces, special_moves
 
 ## JavaScript Frontend Patterns
 

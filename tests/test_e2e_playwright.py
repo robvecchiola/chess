@@ -1249,3 +1249,42 @@ def test_evaluation_updates_independently_from_material(page: Page, live_server)
     
     # They should be independent values
     # Material is just piece count, evaluation includes position
+
+
+def test_resign_button_ends_game(page: Page, live_server):
+    """Test that clicking resign button ends the game"""
+    page.goto(live_server)
+    
+    # Wait for board to load
+    expect(page.locator("#board")).to_be_visible()
+    
+    # Click resign button
+    page.click("#resign-btn")
+    
+    # Should show resignation message
+    status = page.locator("#game-status")
+    expect(status).to_contain_text("resignation")
+    
+    # Game should be over - board should be disabled
+    # (In current implementation, board may still be clickable, but status shows game over)
+    expect(status).to_contain_text("wins")
+
+
+def test_resign_after_moves(page: Page, live_server):
+    """Test resigning after some moves"""
+    page.goto(live_server)
+    
+    # Make a move first
+    page.drag_and_drop('[data-square="e2"]', '[data-square="e4"]')
+    
+    # Wait for AI move to complete by observing UI update to White's turn
+    status = page.locator("#game-status")
+    expect(status).to_contain_text("White's turn", timeout=10000)
+    
+    # Click resign
+    page.click("#resign-btn")
+    
+    # Should show black wins by resignation
+    status = page.locator("#game-status")
+    expect(status).to_contain_text("Black wins")
+    expect(status).to_contain_text("resignation")
