@@ -94,7 +94,7 @@ def test_game_finalization_on_checkmate(client):
     
     with client.session_transaction() as sess:
         game_id = sess.get("game_id")
-        game = Game.query.get(game_id)
+        game = db.session.get(Game, game_id)
         assert game.ended_at is not None
         assert game.result == "0-1"
         assert game.termination_reason == "checkmate"
@@ -114,7 +114,7 @@ def test_game_finalization_on_resignation(client):
     
     with client.session_transaction() as sess:
         game_id = sess.get("game_id")
-        game = Game.query.get(game_id)
+        game = db.session.get(Game, game_id)
         assert game.ended_at is not None
         assert game.result == "0-1"
         assert game.termination_reason == "resignation"
