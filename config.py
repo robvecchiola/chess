@@ -67,11 +67,9 @@ class ProductionConfig(BaseConfig):
     SESSION_COOKIE_HTTPONLY = True
     SESSION_COOKIE_SAMESITE = "Lax"
 
-    # MUST be set in PythonAnywhere Web tab → Environment variables
+    # MUST be set in PythonAnywhere's wsgi file or environment
     SECRET_KEY = os.environ.get("SECRET_KEY")
-
-    # PythonAnywhere MySQL
-    SQLALCHEMY_DATABASE_URI = 'mysql+pymysql://casualchess:Bonestar1!@casualchess.mysql.pythonanywhere-services.com/casualchess$default'
+    SQLALCHEMY_DATABASE_URI = os.environ.get("DATABASE_URL")
 
     # Sessions — filesystem works fine on PA
     SESSION_TYPE = "filesystem"
