@@ -304,6 +304,7 @@ def finalize_game_if_over(board, game):
     finalize_game(game, result, reason)
     return True
 
+
 # Active Game Retrieval
 def get_active_game_or_abort():
     game_id = session.get("game_id")
