@@ -5,7 +5,11 @@ body {
     font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     background: #f4f6f8;
     color: #222;
-    aspect-ratio: 1 / 1;
+}
+
+html, body {
+    height: 100%;
+    overflow-x: hidden;
 }
 
 /* Title */
