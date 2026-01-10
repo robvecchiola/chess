@@ -194,6 +194,21 @@ html, body {
     background: #1e40af;
 }
 
+/* Resign Button */
+#resign-btn {
+    margin-top: 8px;
+    padding: 10px;
+    font-size: 0.95rem;
+    border-radius: 10px;
+    border: none;
+    background: #dc2626;
+    color: white;
+    cursor: pointer;
+}
+#resign-btn:hover {
+    background: #991b1b;
+}
+
 /* Errors */
 .error {
     color: #dc2626;
