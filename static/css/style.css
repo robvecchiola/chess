@@ -195,7 +195,7 @@ html, body {
 }
 
 /* Resign Button */
-#resign-btn {
+#resign-btn, #offer-draw-btn, #claim-50-btn, #claim-repetition-btn {
     margin-top: 8px;
     padding: 10px;
     font-size: 0.95rem;
@@ -205,7 +205,7 @@ html, body {
     color: white;
     cursor: pointer;
 }
-#resign-btn:hover {
+#resign-btn:hover, #offer-draw-btn:hover, #claim-50-btn:hover, #claim-repetition-btn:hover {
     background: #991b1b;
 }
 

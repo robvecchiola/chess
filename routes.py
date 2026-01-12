@@ -288,7 +288,7 @@ def register_routes(app):
             "evaluation": evaluate_board(board)
         })
 
-
+    # reset route
     @app.route("/reset", methods=["POST"])
     def reset():
         print("\nRESET GAME")
@@ -319,6 +319,7 @@ def register_routes(app):
             "evaluation": 0
         })
     
+    # resign route
     @app.route("/resign", methods=["POST"])
     def resign():
         game_id = session.get("game_id")
@@ -353,7 +354,49 @@ def register_routes(app):
             "termination_reason": "resignation",
             "game_over": True
         })
+    
+    # 50-move rule draw claim
+    @app.route("/claim-draw/50-move", methods=["POST"])
+    def claim_50_move_draw():
+        board, *_ = get_game_state()
+        game = db.session.get(Game, session.get("game_id"))
 
+        if not game or game.ended_at:
+            return jsonify({"status": "game_over"})
+
+        if not board.is_fifty_moves():
+            return jsonify({"status": "invalid", "reason": "not_claimable"})
+
+        finalize_game(game, "1/2-1/2", "draw_50_move_rule")
+        return jsonify({"status": "ok", "result": game.result})
+
+    # claim threefold repetition draw
+    @app.route("/claim-draw/repetition", methods=["POST"])
+    def claim_repetition_draw():
+        board, *_ = get_game_state()
+        game = db.session.get(Game, session.get("game_id"))
+
+        if not game or game.ended_at:
+            return jsonify({"status": "game_over"})
+
+        if not board.can_claim_threefold_repetition():
+            return jsonify({"status": "invalid", "reason": "not_claimable"})
+
+        finalize_game(game, "1/2-1/2", "draw_threefold_repetition")
+        return jsonify({"status": "ok", "result": game.result})
+    
+    #dra agreement route
+    @app.route("/draw-agreement", methods=["POST"])
+    def draw_agreement():
+        game = db.session.get(Game, session.get("game_id"))
+
+        if not game or game.ended_at:
+            return jsonify({"status": "game_over"})
+
+        finalize_game(game, "1/2-1/2", "draw_by_agreement")
+        return jsonify({"status": "ok", "result": game.result})
+
+    ###### route for testing purposes only ######
     @app.route("/test/set_position", methods=["POST"])
     def test_set_position():
         """

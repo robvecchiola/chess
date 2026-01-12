@@ -19,13 +19,26 @@
                 <div id="game-status" class="status-card">{{ status }}</div>
                 <div id="error-message" class="error"></div>
 
+                <div class="game-actions">
+                    <button id="resign-btn">Resign</button>
+
+                    <button id="offer-draw-btn">
+                        Offer Draw
+                    </button>
+
+                    <button id="claim-50-btn" style="display:none">
+                        Claim 50-Move Draw
+                    </button>
+
+                    <button id="claim-repetition-btn" style="display:none">
+                        Claim Repetition
+                    </button>
+                </div>
                 <div class="board-buttons">
                     <button id="reset-btn">♻ New Game</button>
-                    <button id="resign-btn">Resign</button>
                 </div>
             </div>
         </div>
-
         <div class="side-panel">
             <div class="card">
                 <h3>Special Moves</h3>
@@ -106,11 +119,11 @@
     <script>
         // Pass initial values from backend to JavaScript
         window.initialFen = '{{ initial_position }}';
-        window.initialMaterial = {{ initial_material | default(0) }};
-        window.initialEvaluation = {{ initial_evaluation | default(0) }};
-        window.initialMoveHistory = {{ initial_move_history | tojson }};
-        window.initialCapturedPieces = {{ initial_captured_pieces | tojson }};
-        window.initialSpecialMoves = {{ initial_special_moves | tojson }};
+        window.initialMaterial = '{{ initial_material | default(0) }}';
+        window.initialEvaluation = '{{ initial_evaluation | default(0) }}';
+        window.initialMoveHistory = '{{ initial_move_history | tojson }}';
+        window.initialCapturedPieces = '{{ initial_captured_pieces | tojson }}';
+        window.initialSpecialMoves = '{{ initial_special_moves | tojson }}';
         window.initialTurn = '{{ initial_turn }}';
         window.aiEnabled = '{{ ai_enabled | lower }}';
     </script>

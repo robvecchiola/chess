@@ -122,6 +122,7 @@ $(document).ready(function () {
                     updateMaterialAdvantage(response.material);
                     updatePositionEvaluation(response.evaluation);
                     updateErrorMessage("");  // Clear any previous error
+                    updateDrawButtons(response);
 
                     // If it's now black's turn, trigger AI move
                     if (response.turn === "black" && !response.game_over) {
@@ -135,6 +136,7 @@ $(document).ready(function () {
                             updateMaterialAdvantage(aiResponse.material);
                             updatePositionEvaluation(aiResponse.evaluation);
                             updateMoveHistory(aiResponse.move_history);
+                            updateDrawButtons(aiResponse);
                             updateStatus(
                                 aiResponse.turn,
                                 aiResponse.check,
@@ -555,6 +557,14 @@ $(document).ready(function () {
         onSquareTap(squareEl.dataset.square);
     });
 
+    // Add touch event for mobile tap-to-move (immediate response)
+    document.getElementById("board").addEventListener("touchend", (e) => {
+        e.preventDefault(); // Prevent delayed click event
+        const squareEl = e.target.closest("[data-square]");
+        if (!squareEl) return;
+        onSquareTap(squareEl.dataset.square);
+    });
+
     //resign
     $("#resign-btn").click(function () {
         $.ajax({
@@ -584,4 +594,66 @@ $(document).ready(function () {
             }
         });
     });
+
+    // draw claims buttons things
+    function updateDrawButtons(state) {
+        document.getElementById("claim-50-btn").style.display =
+            state.fifty_moves ? "inline-block" : "none";
+
+        document.getElementById("claim-repetition-btn").style.display =
+            state.repetition ? "inline-block" : "none";
+    }
+
+    // Offer draw
+    $("#offer-draw-btn").click(function () {
+
+        if (isGameOver || aiThinking) return;
+
+        $.ajax({
+            url: "/draw-agreement",
+            type: "POST",
+            success: function (response) {
+                if (response.status === "ok") {
+                    endGameUI("Draw by agreement");
+                }
+            },
+            error: function () {
+                updateErrorMessage("Unable to offer draw.");
+            }
+        });  
+    });
+
+    //claim 50 moves
+    $("#claim-50-btn").click(function () {
+        if (isGameOver || aiThinking) return;
+
+        $.post("/claim-draw/50-move", function (response) {
+            if (response.status === "ok") {
+                endGameUI("Draw by 50-move rule");
+            } else {
+                updateErrorMessage(response.message);
+            }
+        });
+    });
+
+    //claim repetition
+    $("#claim-repetition-btn").click(function () {
+        if (isGameOver || aiThinking) return;
+
+        $.post("/claim-draw/repetition", function (response) {
+            if (response.status === "ok") {
+                endGameUI("Draw by repetition");
+            } else {
+                updateErrorMessage(response.message);
+            }
+        });
+    });
+
+    function endGameUI(message) {
+        isGameOver = true;
+        board.draggable = false;
+        $("#game-status").text(message);
+
+        $("#offer-draw-btn, #claim-50-btn, #claim-repetition-btn").hide();
+    }
 });

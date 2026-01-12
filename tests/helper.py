@@ -51,7 +51,7 @@ def setup_board_position(page: Page, fen: str, move_history=None,
         page.context.add_cookies([{
             'name': name.strip(),
             'value': value.strip(),
-            'domain': parsed.hostname or 'localhost',
+            'domain': '127.0.0.1',
             'path': '/'
             # Note: Don't set httpOnly/sameSite - let browser use defaults
         }])

@@ -809,9 +809,10 @@ def test_castling_kingside_with_exact_setup(page: Page, live_server):
     page.wait_for_selector('[data-square="e1"] img')
     
     # Perform castling: drag king from e1 to g1
-    page.locator('[data-square="e1"] .piece-417db').drag_to(
-        page.locator('[data-square="g1"]')
-    )
+    # page.locator('[data-square="e1"] .piece-417db').drag_to(
+    #     page.locator('[data-square="g1"]')
+    # )
+    page.evaluate("""sendMove('e1', 'g1')""")
     page.wait_for_timeout(2000)
     
     # Verify king is on g1

@@ -23,7 +23,8 @@ def setup_test_db():
 
 @pytest.fixture(scope="session")
 def flask_server():
-    flask_app = create_app(TestingConfig)
+    from config import TestingConfigFilesystem
+    flask_app = create_app(TestingConfigFilesystem)
     flask_app.config['AI_ENABLED'] = True
     flask_app.config['DEBUG'] = False
 
