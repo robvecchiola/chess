@@ -4,7 +4,7 @@ import random
 from models import Game, GameMove, db
 
 from ai import choose_ai_move, material_score, evaluate_board
-from helpers import explain_illegal_move, finalize_game, finalize_game_if_over, get_active_game_or_abort, get_game_state, init_game, save_game_state, execute_move
+from helpers import explain_illegal_move, finalize_game, finalize_game_if_over, get_active_game_or_abort, get_game_state, init_game, log_game_action, save_game_state, execute_move
 
 # -------------------------------------------------------------------
 # Routes
@@ -330,6 +330,8 @@ def register_routes(app):
         if not game or game.ended_at:
             return jsonify({"status": "error", "message": "Game already ended"}), 400
 
+        board, *_ = get_game_state()
+
         data = request.get_json()
         resigning_color = data.get("color")  # "white" or "black"
 
@@ -338,6 +340,12 @@ def register_routes(app):
 
         winner = "black" if resigning_color == "white" else "white"
         result = "1-0" if winner == "white" else "0-1"
+
+        log_game_action(
+            game,
+            board,
+            "[Resignation]"
+        )
 
         finalize_game(game, result, "resignation")
         db.session.commit()
@@ -366,6 +374,12 @@ def register_routes(app):
 
         if not board.is_fifty_moves():
             return jsonify({"status": "invalid", "reason": "not_claimable"})
+        
+        log_game_action(
+            game,
+            board,
+            "[Draw claimed: 50-move rule]"
+        )
 
         finalize_game(game, "1/2-1/2", "draw_50_move_rule")
         return jsonify({"status": "ok", "result": game.result})
@@ -381,6 +395,12 @@ def register_routes(app):
 
         if not board.can_claim_threefold_repetition():
             return jsonify({"status": "invalid", "reason": "not_claimable"})
+        
+        log_game_action(
+            game,
+            board,
+            "[Draw claimed: threefold repetition]"
+        )
 
         finalize_game(game, "1/2-1/2", "draw_threefold_repetition")
         return jsonify({"status": "ok", "result": game.result})
@@ -388,10 +408,17 @@ def register_routes(app):
     #dra agreement route
     @app.route("/draw-agreement", methods=["POST"])
     def draw_agreement():
+        board, *_ = get_game_state()
         game = db.session.get(Game, session.get("game_id"))
 
         if not game or game.ended_at:
             return jsonify({"status": "game_over"})
+        
+        log_game_action(
+            game,
+            board,
+            "[Draw agreed]"
+        )
 
         finalize_game(game, "1/2-1/2", "draw_by_agreement")
         return jsonify({"status": "ok", "result": game.result})

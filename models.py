@@ -26,8 +26,8 @@ class GameMove(db.Model):
     move_number = db.Column(db.Integer, nullable=False)
 
     color = db.Column(db.String(5))  # "white" or "black"
-    san = db.Column(db.String(20))
-    uci = db.Column(db.String(10))
+    san = db.Column(db.String(50), nullable=False)
+    uci = db.Column(db.String(10), nullable=True)
 
     fen_after = db.Column(db.Text)
 

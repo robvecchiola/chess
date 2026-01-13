@@ -3,7 +3,7 @@ from flask import session
 from extensions import db
 import chess
 
-from models import Game
+from models import Game, GameMove
 # -------------------------------------------------------------------
 # Session Helpers
 # -------------------------------------------------------------------
@@ -319,3 +319,23 @@ def get_active_game_or_abort():
         return game, False
 
     return game, True
+
+#log game actions resign and clams
+def log_game_action(game, board, label):
+    last_move = (
+        GameMove.query
+        .filter_by(game_id=game.id)
+        .order_by(GameMove.move_number.desc())
+        .first()
+    )
+
+    next_number = (last_move.move_number + 1) if last_move else 1
+
+    db.session.add(GameMove(
+        game_id=game.id,
+        move_number=next_number,
+        color="white" if board.turn == chess.WHITE else "black",
+        san=label,
+        uci=None,
+        fen_after=board.fen()
+    ))
