@@ -37,15 +37,11 @@ class TestingConfig(BaseConfig):
         "mysql+pymysql://chess_tester:strongpassword@localhost/chess_app_test"
     )
     
-    # ⚡ Use cachelib for tests (in-memory but persists within process)
-    # This is synchronous and reliable for E2E tests
-    SESSION_TYPE = 'cachelib'
-    SESSION_PERMANENT = False
+    # 🗄️ Use filesystem sessions for tests that check session files
+    SESSION_TYPE = 'filesystem'
+    SESSION_FILE_DIR = os.path.join(BASE_DIR, 'flask_session')
+    SESSION_PERMANENT = True  # Make sessions persist in testing
     SESSION_USE_SIGNER = True
-    SESSION_FILE_DIR = None
-    
-    # ✅ Explicitly configure cachelib to avoid runtime warning
-    SESSION_CACHELIB = SimpleCache()
 
 class TestingConfigFilesystem(BaseConfig):
     """Testing config that uses filesystem sessions (for session file tests)"""

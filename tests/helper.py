@@ -25,40 +25,30 @@ def setup_board_position(page: Page, fen: str, move_history=None,
         "special_moves": special_moves or []
     }
     
-    # Get base URL
-    base_url = page.url.split('/')[0] + '//' + page.url.split('/')[2]
-    
-    # Use Playwright API request to access response headers
-    response = page.request.post(
-        f'{base_url}/test/set_position',
-        data=payload
-    )
+    # Use Playwright's request API to set position and handle cookies properly
+    response = page.request.post("http://localhost:5000/test/set_position", 
+                                data=json.dumps(payload), 
+                                headers={"Content-Type": "application/json"})
     
     response_json = response.json()
     assert response_json.get('status') == 'ok', f"Failed to set position: {response_json}"
     
-    # Extract and update session cookie
+    # Extract session cookie from response and add to browser context
     set_cookie_header = response.headers.get('set-cookie')
     if set_cookie_header:
-        # Parse: "chess_session=<value>; Path=/; HttpOnly; SameSite=Lax"
-        cookie_parts = set_cookie_header.split(';')[0]
-        name, value = cookie_parts.split('=', 1)
-        
-        from urllib.parse import urlparse
-        parsed = urlparse(page.url)
-        
-        # Update browser context cookie
-        page.context.add_cookies([{
-            'name': name.strip(),
-            'value': value.strip(),
-            'domain': '127.0.0.1',
-            'path': '/'
-            # Note: Don't set httpOnly/sameSite - let browser use defaults
-        }])
+        # Parse the Set-Cookie header (basic parsing)
+        cookie_parts = set_cookie_header.split(';')[0].split('=')
+        if len(cookie_parts) == 2:
+            cookie_name, cookie_value = cookie_parts
+            page.context.add_cookies([{
+                'name': cookie_name,
+                'value': cookie_value,
+                'domain': 'localhost',
+                'path': '/'
+            }])
     
-    # Reload page to sync cookie between browser and server
-    # This is safe because home() route won't clear session in TESTING mode
-    page.reload()
+    # Reload page to sync with new session
+    page.goto("http://localhost:5000")
     page.wait_for_load_state('networkidle')
     
     # Update board UI with custom position

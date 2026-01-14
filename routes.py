@@ -21,7 +21,10 @@ def register_routes(app):
         
         # Only clear/init session if not in testing mode AND not restoring from test position
         # In testing, preserve session state across page loads
-        should_clear = not app.config.get('TESTING', False) and not session.get('_test_position_set')
+        if app.config.get('TESTING', False):
+            should_clear = 'fen' not in session
+        else:
+            should_clear = not session.get('_test_position_set') and 'fen' not in session
         
         print(f"[HOME] Should clear session: {should_clear}")
         
@@ -454,22 +457,36 @@ def register_routes(app):
         except ValueError as e:
             return jsonify({"error": f"Invalid FEN: {str(e)}"}), 400
         
+        # Create board without castling rights to preserve empty squares
+        fen_parts = fen.split()
+        castling = fen_parts[2]
+        fen_no_castling = fen.replace(castling, '-')
+        board = chess.Board(fen_no_castling)
+        
+        # Set castling rights
+        if 'K' in castling:
+            board.castling_rights |= chess.BB_H1
+        if 'Q' in castling:
+            board.castling_rights |= chess.BB_A1
+        if 'k' in castling:
+            board.castling_rights |= chess.BB_H8
+        if 'q' in castling:
+            board.castling_rights |= chess.BB_A8
+        
         # Set session state
-        session['fen'] = fen
+        session['fen'] = board.fen()
         session['move_history'] = data.get('move_history', [])
         session['captured_pieces'] = data.get('captured_pieces', {'white': [], 'black': []})
         session['special_moves'] = data.get('special_moves', [])
-        session['_test_position_set'] = True  # Flag to prevent session.clear() in home route
-        session.modified = True  # Force Flask-Session to save changes
+        session['_test_position_set'] = True
+        session.modified = True
         
         print(f"[TEST_SET_POSITION] Session keys after setting: {list(session.keys())}")
-        print(f"[TEST_SET_POSITION] Set FEN to: {fen}")
-        
-        board = chess.Board(fen)
+        print(f"[TEST_SET_POSITION] Set FEN to: {board.fen()}")
         
         return jsonify({
             "status": "ok",
-            "fen": fen,
+            "fen": board.fen(),
             "turn": "white" if board.turn == chess.WHITE else "black",
             "check": board.is_check(),
             "checkmate": board.is_checkmate(),

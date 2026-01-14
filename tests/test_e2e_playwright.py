@@ -794,7 +794,7 @@ def test_castling_kingside_with_exact_setup(page: Page, live_server):
     page.goto(live_server)
     
     # Position: White can castle kingside (e1, g1, h1 clear)
-    castling_fen = "rnbqkbnr/pppppppp/8/8/8/5N2/PPPPPPPP/RNBQK2R w KQkq - 0 1"
+    castling_fen = "rnbqkbnr/pppppppp/8/8/2B5/5N2/PPPPPPPP/RNBQK2R w KQkq - 0 1"
     
     setup_board_position(
         page,
