@@ -2,10 +2,10 @@ $(document).ready(function () {
 
     let board;
     let pendingPromotion = null;
-    let lastPosition = null;   // NEW - always store before move
-    let currentTurn = window.initialTurn || 'white';  // Track whose turn it is
-    let isGameOver = false;     // Track if game is over
-    let aiThinking = false;     // Track if AI is currently thinking
+    let lastPosition = null;
+    let currentTurn = window.initialTurn || 'white';
+    let isGameOver = false;
+    let aiThinking = false;
 
     // Use initial position from backend, fallback to 'start'
     let initialPosition = window.initialFen || 'start';
@@ -16,21 +16,18 @@ $(document).ready(function () {
         pieceTheme: '/static/images/chesspieces/wikipedia/{piece}.png',
 
         onDragStart: function (source, piece) {
-            // snapshot BEFORE illegal moves
             lastPosition = board.position();
 
-            // Prevent dragging if game over, AI is thinking, or opponent's pieces
             const pieceColor = piece.startsWith('w') ? 'white' : 'black';
             if (isGameOver || aiThinking || pieceColor !== currentTurn) {
-                return false;  // Prevent drag
+                return false;
             }
         },
 
         onDrop: function (source, target, piece) {
 
-            // Check if piece was dropped on same square it started from
             if (source === target) {
-                return 'snapback';  // Return piece to original position
+                return 'snapback';
             }
 
             const promotionCheck = detectPromotion(source, target, piece);
@@ -38,7 +35,7 @@ $(document).ready(function () {
             if (promotionCheck.promotionNeeded) {
 
                 pendingPromotion = { source, target, oldPos: lastPosition };
-                board.draggable = false;  // Disable dragging during promotion choice
+                board.draggable = false;
 
                 showPromotionDialog(function(selectedPiece) {
                     sendMove(pendingPromotion.source, pendingPromotion.target, selectedPiece);
@@ -51,7 +48,6 @@ $(document).ready(function () {
         }
     });
 
-    // Make board available globally for testing
     window.board = board;
 
     // Initialize UI with backend values
@@ -61,12 +57,15 @@ $(document).ready(function () {
     updateMaterialAdvantage(Number(window.initialMaterial) || 0);
     updatePositionEvaluation(Number(window.initialEvaluation) || 0);
 
+    // 🔑 INITIALIZE BUTTON VISIBILITY - Hide New Game, show Resign/Draw on page load
+    updateButtonVisibility('game_active');
+
     // If it's AI's turn on page load, trigger AI move
     if (currentTurn === 'black' && window.aiEnabled && !isGameOver) {
-        aiThinking = true;  // Set AI thinking flag
+        aiThinking = true;
         board.draggable = false;
         $.post("/ai-move", function(aiResponse) {
-            aiThinking = false;  // Clear AI thinking flag
+            aiThinking = false;
             board.draggable = true;
             board.position(aiResponse.fen);
             currentTurn = aiResponse.turn;
@@ -90,10 +89,8 @@ $(document).ready(function () {
     // Send move to server
     function sendMove(source, target, promotionPiece=null) {
 
-        board.draggable = false;  // Disable dragging during move
+        board.draggable = false;
 
-        // Show "AI is thinking..." immediately since we're about to send a player move
-        // (which will trigger AI response if legal)
         updateStatus('black', false, false, false, false, false, false, false);
 
         const payload = { from: source, to: target };
@@ -107,29 +104,27 @@ $(document).ready(function () {
 
             success: function (response) {
 
-                // Handle response based on outcome
                 if (response.status === "ok") {
 
                     pendingPromotion = null;
 
                     board.position(response.fen);
-                    currentTurn = response.turn;  // Update current turn
-                    isGameOver = response.game_over;  // Update game over status
+                    currentTurn = response.turn;
+                    isGameOver = response.game_over;
                     updateStatus(response.turn, response.check, response.checkmate, response.stalemate, response.fifty_moves, response.repetition, response.insufficient_material, response.game_over);
                     updateSpecialMove(response.special_moves);
                     updateMoveHistory(response.move_history);
                     updateCaptured(response.captured_pieces);
                     updateMaterialAdvantage(response.material);
                     updatePositionEvaluation(response.evaluation);
-                    updateErrorMessage("");  // Clear any previous error
+                    updateErrorMessage("");
                     updateDrawButtons(response);
 
                     // If it's now black's turn, trigger AI move
                     if (response.turn === "black" && !response.game_over) {
-                        // Keep aiThinking = true, board.draggable = false
                         $.post("/ai-move", function(aiResponse) {
-                            aiThinking = false;  // Clear AI thinking flag
-                            board.draggable = true;  // Re-enable dragging after AI move
+                            aiThinking = false;
+                            board.draggable = true;
                             board.position(aiResponse.fen);
                             currentTurn = aiResponse.turn;
                             updateCaptured(aiResponse.captured_pieces);
@@ -149,49 +144,39 @@ $(document).ready(function () {
                             );
                         });
                     } else {
-                        // It's still player's turn or game over, re-enable interaction
                         aiThinking = false;
                         board.draggable = true;
                     }
 
                 } else {
 
-                    // Illegal move - re-enable interaction
                     aiThinking = false;
                     board.draggable = true;
-                    rollbackPosition();   // unified rollback
-                    // 🔧 FIX: Use server's detailed error message if available
+                    rollbackPosition();
                     const errorMsg = response.message || "Illegal move!";
                     updateErrorMessage(errorMsg);
-                    // Restore correct turn status after illegal move
                     updateStatus(currentTurn, false, false, false, false, false, false, false);
                 }
             },
 
             error: function(xhr) {
-                // Error - re-enable interaction
                 aiThinking = false;
                 board.draggable = true;
                 rollbackPosition();
-                // 🔧 FIX: Extract error message from server response
                 const errorMsg = xhr.responseJSON && xhr.responseJSON.message 
                     ? xhr.responseJSON.message 
                     : "Server error";
                 updateErrorMessage(errorMsg);
-                // Restore correct turn status after server error
                 updateStatus(currentTurn, false, false, false, false, false, false, false);
             }
         });
 
-        // Immediately disable interaction after sending move request
         aiThinking = true;
         board.draggable = false;
     }
 
-    // Make sendMove available globally for testing
     window.sendMove = sendMove;
 
-    // properly undo illegal moves
     function rollbackPosition() {
 
         if (pendingPromotion) {
@@ -203,7 +188,6 @@ $(document).ready(function () {
     }
 
     function detectPromotion(source, target, piece) {
-        // Only pawns
         if (piece[1] !== 'P') {
             return { promotionNeeded: false };
         }
@@ -211,7 +195,6 @@ $(document).ready(function () {
         const isWhite = piece.startsWith('w');
         const finalRank = isWhite ? "8" : "1";
 
-        // Must land on final rank
         if (!target.endsWith(finalRank)) {
             return { promotionNeeded: false };
         }
@@ -219,33 +202,23 @@ $(document).ready(function () {
         const sourceFile = source[0];
         const targetFile = target[0];
         
-        // Get current board position to validate move
         const position = board.position();
 
-        // Pawn moving diagonally — capture move
         if (sourceFile !== targetFile) {
-            // Check if target has opponent piece
             const targetPiece = position[target];
             if (!targetPiece || targetPiece[0] === piece[0]) {
-                // No piece or same color - invalid diagonal move
                 return { promotionNeeded: false };
             }
-            // Valid capture to last rank - needs promotion
             return { promotionNeeded: true };
         }
 
-        // Straight pawn move to last rank
-        // Check if target square is empty
         if (position[target]) {
-            // Target occupied - illegal move, don't show promotion dialog
             return { promotionNeeded: false };
         }
 
-        // Valid straight move to last rank → promotion
         return { promotionNeeded: true };
     }
 
-    // Make detectPromotion available globally for testing
     window.detectPromotion = detectPromotion;
 
     function showPromotionDialog(callback) {
@@ -281,24 +254,49 @@ $(document).ready(function () {
         });
     }
 
-    // Make showPromotionDialog available globally for testing
     window.showPromotionDialog = showPromotionDialog;
+
+    // 🔑 NEW FUNCTION - Controls button visibility based on game state
+    function updateButtonVisibility(state) {
+        const resetBtn = $("#reset-btn");
+        const resignBtn = $("#resign-btn");
+        const drawBtn = $("#offer-draw-btn");
+        const claim50Btn = $("#claim-50-btn");
+        const claimRepBtn = $("#claim-repetition-btn");
+
+        if (state === 'game_active') {
+            // Game is active: hide New Game, show Resign/Draw
+            resetBtn.hide();
+            resignBtn.show();
+            drawBtn.show();
+        } else if (state === 'game_over') {
+            // Game is over: show New Game, hide Resign/Draw
+            resetBtn.show();
+            resignBtn.hide();
+            drawBtn.hide();
+            claim50Btn.hide();
+            claimRepBtn.hide();
+        }
+    }
 
     $("#reset-btn").click(function () {
         $.post("/reset", function(response) {
             if (response.status === "ok") {
                 pendingPromotion = null;
                 lastPosition = null;
-                currentTurn = 'white';  // Reset to white's turn
-                isGameOver = false;      // Reset game over status
+                currentTurn = 'white';
+                isGameOver = false;
                 board.start();
                 updateStatus('white', false, false, false, false, false, false, false);
                 updateSpecialMove(response.special_moves);
                 updateMoveHistory([]);
                 updateCaptured({ white: [], black: [] });
-                updateErrorMessage("");  // Clear error on reset
+                updateErrorMessage("");
                 updateMaterialAdvantage(0);
                 updatePositionEvaluation(0);
+                
+                // 🔑 After reset: hide New Game, show Resign/Draw
+                updateButtonVisibility('game_active');
             }
         });
     });
@@ -330,11 +328,6 @@ $(document).ready(function () {
         if (!Array.isArray(special_moves)) return;
 
         special_moves.forEach(move => {
-            // Expected formats:
-            // "White: O-O"
-            // "Black: e8=Q"
-            // or fallback: infer by prefix
-
             let color = null;
             let text = move;
 
@@ -353,13 +346,11 @@ $(document).ready(function () {
             } else if (color === "black") {
                 blackList.append(li);
             } else {
-                // Fallback: if color unknown, put in both or skip
                 whiteList.append(li);
             }
         });
     }
 
-    // Make updateSpecialMove available globally for testing
     window.updateSpecialMove = updateSpecialMove;
 
     function updateErrorMessage(message) {
@@ -388,7 +379,6 @@ $(document).ready(function () {
             tbody.append(row);
         }
 
-        // Auto-scroll to latest move
         tbody.scrollTop(tbody.prop("scrollHeight"));
     }
 
@@ -403,14 +393,12 @@ $(document).ready(function () {
         const container = $(selector);
         container.empty();
 
-        // Determine piece color based on which tray we're rendering
-        const isWhiteTray = selector === "#black-captured"; // white pieces captured by black
+        const isWhiteTray = selector === "#black-captured";
         const colorPrefix = isWhiteTray ? "w" : "b";
 
         pieces.forEach(piece => {
             let pieceCode = piece;
 
-            // If backend sends single-letter piece (p, n, q, etc)
             if (piece.length === 1) {
                 pieceCode = colorPrefix + piece.toUpperCase();
             }
@@ -450,7 +438,6 @@ $(document).ready(function () {
         }
     }
 
-    // Make updateMaterialAdvantage available globally for testing
     window.updateMaterialAdvantage = updateMaterialAdvantage;
 
     function updatePositionEvaluation(evalCp) {
@@ -467,7 +454,6 @@ $(document).ready(function () {
         el.text(`${pawns} (${label})`);
     }
 
-    // Make updatePositionEvaluation available globally for testing
     window.updatePositionEvaluation = updatePositionEvaluation;
 
     function formatEvaluation(evalCp) {
@@ -488,8 +474,6 @@ $(document).ready(function () {
         }
     }
 
-    // Handle window resize fore responsiveness
-
     let resizeTimeout;
 
     function resizeBoardSafely() {
@@ -498,13 +482,12 @@ $(document).ready(function () {
             if (board) {
                 board.resize();
             }
-        }, 250); // mobile browsers need time to settle layout
+        }, 250);
     }
 
     window.addEventListener("resize", resizeBoardSafely);
     window.addEventListener("orientationchange", resizeBoardSafely);
 
-    // tap-to-move for mobile (server-authoritative)
     let selectedSquare = null;
 
     function onSquareTap(square) {
@@ -514,10 +497,8 @@ $(document).ready(function () {
         const position = board.position();
         const piece = position[square];
 
-        // FIRST TAP — select piece
         if (!selectedSquare) {
 
-            // Must tap a white piece
             if (!piece || !piece.startsWith("w")) return;
 
             selectedSquare = square;
@@ -525,10 +506,8 @@ $(document).ready(function () {
             return;
         }
 
-        // SECOND TAP — attempt move
         clearHighlights();
 
-        // Cancel if same square tapped
         if (square === selectedSquare) {
             selectedSquare = null;
             return;
@@ -550,22 +529,20 @@ $(document).ready(function () {
         });
     }
 
-    // Attach handler (robust)
     document.getElementById("board").addEventListener("click", (e) => {
         const squareEl = e.target.closest("[data-square]");
         if (!squareEl) return;
         onSquareTap(squareEl.dataset.square);
     });
 
-    // Add touch event for mobile tap-to-move (immediate response)
     document.getElementById("board").addEventListener("touchend", (e) => {
-        e.preventDefault(); // Prevent delayed click event
+        e.preventDefault();
         const squareEl = e.target.closest("[data-square]");
         if (!squareEl) return;
         onSquareTap(squareEl.dataset.square);
     });
 
-    //resign
+    // 🔑 RESIGN BUTTON - Show New Game, hide Resign/Draw on click
     $("#resign-btn").click(function () {
         $.ajax({
             url: "/resign",
@@ -590,12 +567,14 @@ $(document).ready(function () {
                     );
                     isGameOver = true;
                     board.draggable = false;
+
+                    // 🔑 After resign: show New Game, hide Resign/Draw
+                    updateButtonVisibility('game_over');
                 }
             }
         });
     });
 
-    // draw claims buttons things
     function updateDrawButtons(state) {
         document.getElementById("claim-50-btn").style.display =
             state.fifty_moves ? "inline-block" : "none";
@@ -604,7 +583,7 @@ $(document).ready(function () {
             state.repetition ? "inline-block" : "none";
     }
 
-    // Offer draw
+    // 🔑 OFFER DRAW BUTTON - Show New Game, hide Resign/Draw on click
     $("#offer-draw-btn").click(function () {
 
         if (isGameOver || aiThinking) return;
@@ -615,6 +594,9 @@ $(document).ready(function () {
             success: function (response) {
                 if (response.status === "ok") {
                     endGameUI("Draw by agreement");
+                    
+                    // 🔑 After draw: show New Game, hide Resign/Draw
+                    updateButtonVisibility('game_over');
                 }
             },
             error: function () {
@@ -623,26 +605,28 @@ $(document).ready(function () {
         });  
     });
 
-    //claim 50 moves
+    // 🔑 CLAIM 50-MOVE DRAW - Show New Game, hide Resign/Draw on claim
     $("#claim-50-btn").click(function () {
         if (isGameOver || aiThinking) return;
 
         $.post("/claim-draw/50-move", function (response) {
             if (response.status === "ok") {
                 endGameUI("Draw by 50-move rule");
+                updateButtonVisibility('game_over');
             } else {
                 updateErrorMessage(response.message);
             }
         });
     });
 
-    //claim repetition
+    // 🔑 CLAIM REPETITION DRAW - Show New Game, hide Resign/Draw on claim
     $("#claim-repetition-btn").click(function () {
         if (isGameOver || aiThinking) return;
 
         $.post("/claim-draw/repetition", function (response) {
             if (response.status === "ok") {
                 endGameUI("Draw by repetition");
+                updateButtonVisibility('game_over');
             } else {
                 updateErrorMessage(response.message);
             }

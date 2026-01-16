@@ -9,7 +9,7 @@
 </head>
 <body>
 
-    <h1 class="app-title">rob’s Flask Chess AI ♟️</h1>
+    <h1 class="app-title">rob's Flask Chess AI ♟️</h1>
 
     <div class="chess-app">
         <div class="board-container">
@@ -20,12 +20,15 @@
                 <div id="error-message" class="error"></div>
 
                 <div class="game-actions">
-                    <button id="resign-btn">Resign</button>
+                    <!-- 🔑 RESIGN BUTTON - Initially visible, hidden after game over -->
+                    <button id="resign-btn" style="display: inline-block;">Resign</button>
 
-                    <button id="offer-draw-btn">
+                    <!-- 🔑 OFFER DRAW BUTTON - Initially visible, hidden after game over -->
+                    <button id="offer-draw-btn" style="display: inline-block;">
                         Offer Draw
                     </button>
 
+                    <!-- 🔑 CLAIM DRAW BUTTONS - Initially hidden, shown when claimable -->
                     <button id="claim-50-btn" style="display:none">
                         Claim 50-Move Draw
                     </button>
@@ -35,7 +38,8 @@
                     </button>
                 </div>
                 <div class="board-buttons">
-                    <button id="reset-btn">♻ New Game</button>
+                    <!-- 🔑 NEW GAME BUTTON - Initially hidden, shown after game over -->
+                    <button id="reset-btn" style="display: none;">♻ New Game</button>
                 </div>
             </div>
         </div>
@@ -88,7 +92,7 @@
                         Evaluation
                         <span class="tooltip-icon" tabindex="0">ⓘ
                             <span class="tooltip-text">
-                                Evaluation is the engine’s assessment of the position,
+                                Evaluation is the engine's assessment of the position,
                                 combining material, piece activity, king safety, and structure.
                                 Positive favors White, negative favors Black.
                             </span>
