@@ -58,7 +58,9 @@ $(document).ready(function () {
     updatePositionEvaluation(Number(window.initialEvaluation) || 0);
 
     // 🔑 INITIALIZE BUTTON VISIBILITY - Hide New Game, show Resign/Draw on page load
-    updateButtonVisibility('game_active');
+    // Only hide reset if game is active (not game over)
+    const initialGameState = window.initialGameOver ? 'game_over' : 'game_active';
+    updateButtonVisibility(initialGameState);
 
     // If it's AI's turn on page load, trigger AI move
     if (currentTurn === 'black' && window.aiEnabled && !isGameOver) {
@@ -131,6 +133,7 @@ $(document).ready(function () {
                             updateMaterialAdvantage(aiResponse.material);
                             updatePositionEvaluation(aiResponse.evaluation);
                             updateMoveHistory(aiResponse.move_history);
+                            updateSpecialMove(aiResponse.special_moves);
                             updateDrawButtons(aiResponse);
                             updateStatus(
                                 aiResponse.turn,
@@ -265,8 +268,8 @@ $(document).ready(function () {
         const claimRepBtn = $("#claim-repetition-btn");
 
         if (state === 'game_active') {
-            // Game is active: hide New Game, show Resign/Draw
-            resetBtn.hide();
+            // Game is active: show New Game, show Resign/Draw
+            resetBtn.show();
             resignBtn.show();
             drawBtn.show();
         } else if (state === 'game_over') {

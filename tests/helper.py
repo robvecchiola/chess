@@ -6,18 +6,15 @@ def setup_board_position(page: Page, fen: str, move_history=None,
     """
     Helper to set exact board position using test endpoint.
     
-    CRITICAL: Uses page.request.post() to access Set-Cookie headers, then manually
-    updates browser context cookies AND makes browser re-request the page to sync cookies.
+    Uses browser's fetch with credentials to ensure Flask-Session cookie
+    is sent and maintained across the /test/set_position call.
     
-    Flow:
-    1. page.request.post() to /test/set_position (Playwright API - has headers)
-    2. Extract Set-Cookie header from response
-    3. Add cookie to browser context via page.context.add_cookies()
-    4. Reload page so browser picks up the new cookie
-    5. Update board UI via JavaScript
-    
-    Note: page.reload() is safe here because home() route preserves session when TESTING=True
+    Note: With function-scoped browser context (from conftest.py),
+    each test gets a fresh browser context, so no stale session cookies.
     """
+    # Clear any cookies from previous tests to ensure fresh session
+    page.context.clear_cookies()
+    
     payload = {
         "fen": fen,
         "move_history": move_history or [],
@@ -25,71 +22,41 @@ def setup_board_position(page: Page, fen: str, move_history=None,
         "special_moves": special_moves or []
     }
     
-    # Use Playwright's request API to set position and handle cookies properly
-    response = page.request.post("http://localhost:5000/test/set_position", 
-                                data=json.dumps(payload), 
-                                headers={"Content-Type": "application/json"})
+    # Use browser's fetch with credentials: 'include' to send session cookies
+    # This is critical - without credentials, fetch won't send the session cookie!
+    result = page.evaluate(f"""
+        async () => {{
+            const response = await fetch('/test/set_position', {{
+                method: 'POST',
+                headers: {{'Content-Type': 'application/json'}},
+                credentials: 'include',
+                body: JSON.stringify({json.dumps(payload)})
+            }});
+            const data = await response.json();
+            console.log('SET_POSITION RESULT:', data);
+            
+            // Get current cookies
+            const cookies = document.cookie;
+            console.log('Current cookies:', cookies);
+            
+            return data;
+        }}
+    """)
     
-    response_json = response.json()
-    assert response_json.get('status') == 'ok', f"Failed to set position: {response_json}"
+    print(f"[SETUP] /test/set_position returned: {result}")
+    assert result.get('status') == 'ok', f"Failed to set position: {result}"
     
-    # Extract session cookie from response and add to browser context
-    set_cookie_header = response.headers.get('set-cookie')
-    if set_cookie_header:
-        # Parse the Set-Cookie header (basic parsing)
-        cookie_parts = set_cookie_header.split(';')[0].split('=')
-        if len(cookie_parts) == 2:
-            cookie_name, cookie_value = cookie_parts
-            page.context.add_cookies([{
-                'name': cookie_name,
-                'value': cookie_value,
-                'domain': 'localhost',
-                'path': '/'
-            }])
+    # Extra delay to ensure session is written to disk AND browser receives Set-Cookie
+    page.wait_for_timeout(3000)
     
-    # Reload page to sync with new session
-    page.goto("http://localhost:5000")
+    # Navigate to the page (instead of reload) to force a fresh GET with the session cookie
+    # This ensures Flask loads the updated session from disk
+    print(f"[SETUP] Navigating to / to load session with FEN: {fen}")
+    page.goto(page.url.split('?')[0])  # Navigate to /, stripping any query params
     page.wait_for_load_state('networkidle')
     
-    # Update board UI with custom position
-    page.evaluate(
-        """
-        (data) => {
-            if (window.board && data.fen) {
-                window.board.position(data.fen);
-            }
-            
-            let status = '';
-            if (data.checkmate) {
-                const winner = data.turn === 'white' ? 'Black' : 'White';
-                status = winner + ' wins — Checkmate!';
-            } else if (data.stalemate) {
-                status = 'Draw';
-            } else {
-                status = data.turn === 'white' ? "White's turn" : "Black's turn";
-                if (data.check) status += ' - Check!';
-            }
-            
-            const statusEl = document.getElementById('game-status');
-            if (statusEl) statusEl.textContent = status;
-            
-            // Update material and evaluation if provided
-            if (data.material !== undefined) {
-                updateMaterialAdvantage(data.material);
-            }
-            if (data.evaluation !== undefined) {
-                updatePositionEvaluation(data.evaluation);
-            }
-            if (data.special_moves) {
-                updateSpecialMove(data.special_moves);
-            }
-        }
-        """,
-        response_json
-    )
-    
-    # Wait for board to stabilize
-    page.wait_for_timeout(500)
+    # Wait for board to stabilize after navigation
+    page.wait_for_timeout(1000)
 
 def get_piece_in_square(page: Page, square: str):
     """

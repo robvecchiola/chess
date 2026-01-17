@@ -39,7 +39,7 @@
                 </div>
                 <div class="board-buttons">
                     <!-- 🔑 NEW GAME BUTTON - Initially hidden, shown after game over -->
-                    <button id="reset-btn" style="display: none;">♻ New Game</button>
+                    <button id="reset-btn">♻ New Game</button>
                 </div>
             </div>
         </div>
@@ -130,6 +130,7 @@
         window.initialSpecialMoves = '{{ initial_special_moves | tojson }}';
         window.initialTurn = '{{ initial_turn }}';
         window.aiEnabled = '{{ ai_enabled | lower }}';
+        window.initialGameOver = '{{ initial_game_over | lower }}' === 'true';
     </script>
     <script src="{{ url_for('static', filename='js/chessboard-init.js') }}"></script>
 </body>

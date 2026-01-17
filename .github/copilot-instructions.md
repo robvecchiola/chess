@@ -51,20 +51,66 @@ The board state is stored in FEN format in the session, and move_history is main
 
 ## Testing Structure
 
-Three test files in [tests/](../tests/):
+Four test file types in [tests/](../tests/):
 - [test_chess_logic.py](../tests/test_chess_logic.py) - Pure python-chess validation (legal moves, captures, promotion, en passant)
 - [test_routes_api.py](../tests/test_routes_api.py) - Flask API tests with `AI_ENABLED=False` to isolate player moves
 - [test_ai_and_endgames.py](../tests/test_ai_and_endgames.py) - AI behavior and game-over detection with `AI_ENABLED=True`
+- [test_e2e_playwright.py](../tests/test_e2e_playwright.py) - E2E browser tests with Playwright
 
 **Always disable AI in tests unless specifically testing AI** via `app.config['AI_ENABLED'] = False` in fixtures.
 
-Helper pattern for API tests:
+## 🔑 Critical Session Isolation Pattern for E2E Tests
+
+**Production-Grade Session Isolation**:
+
+E2E tests use `page.context.clear_cookies()` at test start for true session isolation:
+
 ```python
-def make_move(client, from_sq, to_sq, promotion=None):
-    payload = {"from": from_sq, "to": to_sq}
-    if promotion: payload["promotion"] = promotion
-    return client.post("/move", data=json.dumps(payload), 
-                      content_type="application/json").get_json()
+def setup_board_position(page: Page, fen: str, move_history=None, ...):
+    """Helper to set exact board position using test endpoint."""
+    # Clear cookies from any previous test to ensure fresh session
+    page.context.clear_cookies()  # ← Critical for isolation
+    
+    # POST to set the position with credentials included
+    result = page.evaluate(f"""
+        async () => {{
+            const response = await fetch('/test/set_position', {{
+                method: 'POST',
+                headers: {{'Content-Type': 'application/json'}},
+                credentials: 'include',  # ← Send session cookies
+                body: JSON.stringify({payload})
+            }});
+            return await response.json();
+        }}
+    """)
+    
+    # Critical timing: wait for Flask-Session to write to disk
+    page.wait_for_timeout(3000)
+    
+    # Navigate (not reload) to force fresh GET with session cookie
+    page.goto("/")
+    page.wait_for_load_state("networkidle")
+```
+
+**Why This Works**:
+- `clear_cookies()` removes stale session IDs from previous tests
+- `credentials: 'include'` ensures POST sends fresh session cookies
+- 3-second wait allows Flask-Session to write to disk
+- `page.goto()` triggers GET with fresh cookie, loads correct session
+- Result: Each test gets isolated session matching production user behavior
+
+**Why NOT Function-Scoped Browser Contexts**:
+- Fresh browser context = no cookies at all initially
+- `/test/set_position` creates session file but new browser doesn't have the cookie
+- `page.goto("/")` loads WRONG session file (no cookie to find it)
+- Result: Stale FEN, test failures (learned through debugging phase)
+
+**🗄️ Flask-Session Configuration Critical for Tests**:
+```python
+# config.py - TestingConfigFilesystem
+SESSION_PERMANENT = True       # ← Must be True for persistence
+SESSION_TYPE = 'filesystem'    # ← Use disk storage
+SESSION_FILE_DIR = './flask_session'
 ```
 
 ## Development Commands

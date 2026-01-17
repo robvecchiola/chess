@@ -22,7 +22,6 @@ def init_game():
 
 
 def get_game_state():
-    print(f"get_game_state: session fen: {session.get('fen')}")
     if 'fen' not in session or session['fen'] is None:
         init_game()
 
@@ -35,7 +34,6 @@ def get_game_state():
     # Try to create board from FEN, fallback to starting position if invalid
     try:
         board = chess.Board(session.get('fen', chess.STARTING_FEN))
-        print(f"Board created from fen: {board.fen()}")
     except ValueError:
         board = chess.Board()
 

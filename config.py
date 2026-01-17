@@ -55,7 +55,7 @@ class TestingConfigFilesystem(BaseConfig):
     # 🗄️ Use filesystem sessions for tests that check session files
     SESSION_TYPE = 'filesystem'
     SESSION_FILE_DIR = os.path.join(BASE_DIR, 'flask_session')
-    SESSION_PERMANENT = False
+    SESSION_PERMANENT = True  # ← CHANGED: Must be True for E2E tests so sessions persist across reloads
     SESSION_USE_SIGNER = True
 
 class ProductionConfig(BaseConfig):

@@ -42,6 +42,62 @@ tests/
 
 ---
 
+## Session Management & Test Isolation
+
+### 🔑 Critical: Cookie Clearing for Test Isolation
+
+**Problem**: E2E tests share Flask-Session cookies, causing session contamination.
+
+**Solution**: Clear cookies at test start via `setup_board_position()` helper:
+
+```python
+def setup_board_position(page: Page, fen: str, ...):
+    """Set exact board position - handles session isolation."""
+    # CRITICAL: Clear cookies from previous test
+    page.context.clear_cookies()
+    
+    # Now set position with fresh session
+    result = page.evaluate(f"""
+        fetch('/test/set_position', {{
+            method: 'POST',
+            credentials: 'include',  # Send fresh session cookies
+            body: JSON.stringify({payload})
+        }})
+    """)
+    
+    page.wait_for_timeout(3000)  # Wait for disk write
+    page.goto("/")               # Load with fresh session
+```
+
+**Why It Works**:
+1. `clear_cookies()` removes stale session IDs
+2. Fresh POST creates new session file on disk
+3. Browser receives Set-Cookie response
+4. `page.goto()` loads page with correct session
+5. **Result**: Each test is truly isolated
+
+### 🗄️ Flask-Session Configuration Requirements
+
+**Critical Settings** (in [config.py](config.py) `TestingConfigFilesystem`):
+
+```python
+SESSION_PERMANENT = True           # Must be True for tests
+SESSION_TYPE = 'filesystem'        # Use disk storage
+SESSION_FILE_DIR = './flask_session'
+SESSION_USE_SIGNER = True
+```
+
+**Why Each Setting Matters**:
+- `SESSION_PERMANENT = True`: Sessions survive page reloads (essential for E2E)
+- `SESSION_TYPE = 'filesystem'`: Sessions persist on disk between requests
+- `SESSION_FILE_DIR`: Centralized location for test session files
+- `SESSION_USE_SIGNER`: Sign cookies to prevent tampering
+
+**What Breaks Without These**:
+- `SESSION_PERMANENT = False`: Sessions cleared on page reload → position lost
+- `SESSION_TYPE = 'default'`: In-memory sessions cleared between requests
+- Missing signer: Cookie validation fails
+
 ## Common Pitfalls & Solutions
 
 ### ❌ Pitfall #1: Illegal Pawn Moves
@@ -157,6 +213,44 @@ def test_player_move(client):
     rv = make_move(client, "e2", "e4")
     assert len(rv["move_history"]) == 1  # PASS
 ```
+
+### ❌ Pitfall #6: Session Contamination Between E2E Tests
+
+**Problem:**
+```python
+# Test 1: Sets promotion position
+def test_promotion(page, base_url):
+    setup_board_position(page, 'promotion_fen')
+    # ...plays moves...
+
+# Test 2: Expects castling position
+def test_castling(page, base_url):
+    setup_board_position(page, 'castling_fen')
+    # But page.goto("/") loads STARTING FEN instead!
+    # ❌ FAILS: Session has old FEN or wrong session ID
+```
+
+**Solution** (in helper):
+```python
+def setup_board_position(page: Page, fen: str, ...):
+    # MUST clear cookies at start of each test
+    page.context.clear_cookies()  # ← Remove stale session cookies
+    
+    # Now set position with fresh session
+    result = page.evaluate(f"...fetch('/test/set_position'...)...")
+    page.wait_for_timeout(3000)  # Wait for disk write
+    page.goto("/")               # Load with fresh session
+    # ✅ WORKS: Fresh session, correct FEN
+```
+
+**Why This Matters**:
+- Session-scoped browser context (shared cookies) = each test inherits previous test's session ID
+- If previous test called `/reset`, session file deleted but cookie still points to it
+- Next test's `/test/set_position` creates NEW session file
+- But browser cookie still has OLD session ID
+- `page.goto("/")` looks for OLD session file, loads STARTING_FEN
+- Result: Wrong FEN, test fails
+- Solution: Clear cookies, get fresh session ID each time
 
 ### ❌ Pitfall #6: Castling Rights After Moves
 
@@ -304,11 +398,13 @@ app.config['AI_ENABLED'] = False   # Disable AI auto-response
 
 ### Browser-Based Tests
 
-**File:** `tests/e2e/test_chess_e2e.py`
+**File:** `tests/test_e2e_playwright.py`
 
+**Critical Setup Pattern**:
 ```python
 import pytest
 from playwright.sync_api import Page, expect
+from tests.helper import setup_board_position, reset_board
 
 def test_player_makes_move(page: Page, base_url):
     """Test dragging a piece makes a move"""
@@ -327,62 +423,123 @@ def test_player_makes_move(page: Page, base_url):
     move_history = page.locator("#move-history tbody")
     expect(move_history).to_contain_text("e4")
 
-def test_promotion_dialog_appears(page: Page, base_url):
-    """Test promotion dialog shows when pawn reaches 8th rank"""
-    page.goto(f"{base_url}/test/set_position")
+def test_promotion_with_setup(page: Page, base_url):
+    """Test promotion dialog with isolated session"""
+    # ✅ Use helper for proper session isolation
+    setup_board_position(
+        page, 
+        '1nbqkbnr/P6p/8/8/8/8/1PPPPPPP/RNBQKBNR w KQkq - 0 1'
+    )
     
-    # Set up position with pawn on 7th rank
-    page.evaluate("""
-        fetch('/test/set_position', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({
-                fen: '1nbqkbnr/P6p/8/8/8/8/1PPPPPPP/RNBQKBNR w KQkq - 0 1'
-            })
-        })
-    """)
-    
-    page.reload()
+    # Verify correct position loaded
+    board_content = page.content()
+    assert 'wP' in board_content  # White pawn on a7
     
     # Drag pawn to promotion square
     page.drag_and_drop('[data-square="a7"]', '[data-square="a8"]')
     
     # Promotion dialog should appear
     expect(page.locator("#promotion-dialog")).to_be_visible()
+    
+    # Select queen
+    page.locator("button[data-piece='q']").click()
+    
+    # Verify promotion occurred
+    special_moves = page.locator("#special-white li")
+    expect(special_moves).to_contain_text("Promotion")
 ```
 
-**Setup:**
+**Session-Aware Helper** (in `tests/helper.py`):
 ```python
-# conftest.py for Playwright
+from playwright.sync_api import Page
+import json
+
+def setup_board_position(page: Page, fen: str, move_history=None, 
+                        captured_pieces=None, special_moves=None):
+    """
+    Set exact board position with proper session isolation.
+    
+    🔑 KEY: Clears cookies to ensure fresh session per test.
+    """
+    # CRITICAL: Clear cookies from previous test
+    page.context.clear_cookies()
+    
+    payload = {
+        "fen": fen,
+        "move_history": move_history or [],
+        "captured_pieces": captured_pieces or {"white": [], "black": []},
+        "special_moves": special_moves or []
+    }
+    
+    # Use fetch with credentials to send session cookies
+    result = page.evaluate(f"""
+        async () => {{
+            const response = await fetch('/test/set_position', {{
+                method: 'POST',
+                headers: {{'Content-Type': 'application/json'}},
+                credentials: 'include',  # ← Critical for session
+                body: JSON.stringify({json.dumps(payload)})
+            }});
+            return await response.json();
+        }}
+    """)
+    
+    assert result.get('status') == 'ok'
+    
+    # Wait for Flask-Session to write to disk
+    page.wait_for_timeout(3000)
+    
+    # Navigate (not reload) to force fresh GET request
+    page.goto("/")
+    page.wait_for_load_state("networkidle")
+    page.wait_for_timeout(1000)  # Extra time for DOM updates
+```
+
+**Setup** (in `tests/conftest.py`):
+```python
 import pytest
-from playwright.sync_api import sync_playwright
+from threading import Thread
+import time
 
 @pytest.fixture(scope="session")
-def browser():
-    with sync_playwright() as p:
-        browser = p.chromium.launch()
-        yield browser
-        browser.close()
+def flask_app():
+    """Create app for entire test session."""
+    from app import create_app
+    from config import TestingConfigFilesystem
+    from extensions import db
+    
+    app = create_app(TestingConfigFilesystem)
+    with app.app_context():
+        db.create_all()
+        yield app
+        db.session.remove()
+        db.drop_all()
 
-@pytest.fixture
-def page(browser):
-    context = browser.new_context()
-    page = context.new_page()
-    yield page
-    context.close()
-
-@pytest.fixture
-def base_url():
+@pytest.fixture(scope="session")
+def base_url(flask_app):
+    """Start Flask server and return base URL."""
+    def run_app():
+        flask_app.run(port=5000, debug=False, use_reloader=False)
+    
+    thread = Thread(target=run_app, daemon=True)
+    thread.start()
+    time.sleep(2)  # Wait for server startup
+    
     return "http://localhost:5000"
+
+# Playwright fixtures are auto-provided by pytest-playwright
+# page, browser, base_url, etc.
 ```
 
 ---
 
 ## Session Testing
 
-### Critical for Production
+### API Session Persistence
 
-**File:** `test_session_persistence.py`
+**File:** `test_routes_api.py`
+
+Integration tests validate Flask session behavior:
 
 ```python
 def test_session_persists_across_requests(client):
@@ -419,6 +576,29 @@ def test_session_survives_illegal_move(client):
     assert rv_legal["status"] == "ok"
     assert len(rv_legal["move_history"]) == 2
 ```
+
+### E2E Session Isolation
+
+**Critical**: E2E tests must clear cookies at start to prevent session contamination:
+
+```python
+def test_promotion_then_castling(page: Page, base_url):
+    """Two consecutive tests with different positions."""
+    # Test 1: Promotion
+    setup_board_position(page, promotion_fen)  # Clears cookies internally
+    # ...test promotion...
+    
+    # Test 2: Castling (separate test in real usage)
+    def test_castling(page: Page, base_url):
+        setup_board_position(page, castling_fen)  # ← Clears cookies
+        # setup_board_position() calls page.context.clear_cookies()
+        # This ensures fresh session, not contaminated by test 1
+```
+
+**Why Separate Tests**:
+- pytest creates new `page` fixture for each test
+- But if tests manually reuse page, must call `setup_board_position()`
+- Cookie clearing in helper prevents session ID mismatches
 
 ---
 
@@ -464,6 +644,7 @@ def test_move_response_structure(client):
 
 ### Pattern 4: Use FEN for Complex Setups
 
+**API Tests:**
 ```python
 from tests.helper import set_position
 
@@ -476,25 +657,74 @@ def test_specific_position(client):
     assert rv["status"] == "ok"
 ```
 
-### Pattern 5: Test Isolation
-
+**E2E Tests:**
 ```python
-# GOOD: Each test is independent
+from tests.helper import setup_board_position
+
+def test_castling_position(page: Page, base_url):
+    # ✅ Helper handles session isolation
+    setup_board_position(
+        page, 
+        'r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1'
+    )
+    
+    # Page is loaded with correct FEN, fresh session
+    page.drag_and_drop('[data-square="e1"]', '[data-square="g1"]')
+    expect(page.locator("#special-white li")).to_contain_text("Castling")
+```
+
+### Pattern 5: Test Isolation (Critical for E2E)
+
+**Good - Each test independent:**
+```python
+# API Tests
 def test_move_A(client):
-    reset_board(client)
-    # Test move A
+    reset_board(client)  # Fresh session
+    rv = make_move(client, "e2", "e4")
+    assert rv["status"] == "ok"
 
 def test_move_B(client):
-    reset_board(client)
-    # Test move B
+    reset_board(client)  # Fresh session
+    rv = make_move(client, "e2", "e4")
+    assert rv["status"] == "ok"
 
-# BAD: Tests depend on each other
+# E2E Tests
+def test_e2e_move_A(page: Page, base_url):
+    page.goto(base_url)  # Fresh page
+    page.drag_and_drop('[data-square="e2"]', '[data-square="e4"]')
+
+def test_e2e_move_B(page: Page, base_url):
+    page.goto(base_url)  # Fresh page (pytest creates new fixture)
+    page.drag_and_drop('[data-square="e2"]', '[data-square="e4"]')
+
+# E2E with setup
+def test_e2e_promotion(page: Page, base_url):
+    setup_board_position(page, promotion_fen)  # Clears cookies, sets position
+    page.drag_and_drop('[data-square="a7"]', '[data-square="a8"]')
+
+def test_e2e_castling(page: Page, base_url):
+    setup_board_position(page, castling_fen)  # Fresh session, no contamination
+    page.drag_and_drop('[data-square="e1"]', '[data-square="g1"]')
+```
+
+**Bad - Tests depend on each other:**
+```python
+# ❌ DON'T DO THIS
 def test_move_A(client):
     make_move(client, "e2", "e4")
 
 def test_move_B(client):
     # Assumes e4 was already played!
     make_move(client, "e7", "e5")
+
+# ❌ DON'T DO THIS (E2E)
+def test_e2e_setup(page: Page, base_url):
+    page.goto(base_url)
+    page.evaluate("globalState = 'promotion_ready'")  # Modifies page state
+
+def test_e2e_test_with_setup(page: Page, base_url):
+    # Assumes globalState was set by previous test!
+    # FAILS: Fresh page fixture = clean globalState
 ```
 
 ---

@@ -14,26 +14,15 @@ def register_routes(app):
 
     @app.route("/")
     def home():
-        print(f"\n[HOME] Handling GET / request")
-        print(f"[HOME] TESTING mode: {app.config.get('TESTING', False)}")
-        print(f"[HOME] Session has _test_position_set: {session.get('_test_position_set', False)}")
-        print(f"[HOME] Current session keys: {list(session.keys())}")
-        
-        # Only clear/init session if not in testing mode AND not restoring from test position
-        # In testing, preserve session state across page loads
-        if app.config.get('TESTING', False):
-            should_clear = 'fen' not in session
-        else:
-            should_clear = not session.get('_test_position_set') and 'fen' not in session
-        
-        print(f"[HOME] Should clear session: {should_clear}")
+        # Only clear/init session if:
+        # No FEN in session (means this is a fresh start, not a test position restore)
+        should_clear = 'fen' not in session
         
         if should_clear:
             session.clear()
             session.modified = True
             init_game()
-        # Don't clear flag - preserve test position
-        # Flag will be cleared when first move is made
+        # Session FEN will be preserved across requests as long as it exists
         
         # Get current board state to pass to template
         board, move_history, captured_pieces, special_moves = get_game_state()
@@ -59,6 +48,7 @@ def register_routes(app):
         
         material = material_score(board)
         evaluation = evaluate_board(board)
+        game_over = board.is_checkmate() or board.is_stalemate() or board.is_insufficient_material() or board.is_fifty_moves() or board.is_seventyfive_moves() or board.is_fivefold_repetition()
         
         return render_template("chess.html", 
                              initial_position=initial_position, 
@@ -69,7 +59,8 @@ def register_routes(app):
                              initial_captured_pieces=captured_pieces,
                              initial_special_moves=special_moves,
                              initial_turn="white" if board.turn == chess.WHITE else "black",
-                             ai_enabled=app.config.get('AI_ENABLED', False))
+                             ai_enabled=app.config.get('AI_ENABLED', False),
+                             initial_game_over=game_over)
 
 
     @app.route("/move", methods=["POST"])
@@ -100,6 +91,8 @@ def register_routes(app):
 
         print("\n--- DEBUG: MOVE REQUEST ---")
         print("Session keys:", list(session.keys()))
+        print("Session FEN value:", session.get('fen'))
+        print("Session _test_position_set:", session.get('_test_position_set'))
         print("Current board FEN:", board.fen())
         print("Current turn:", "white" if board.turn == chess.WHITE else "black")
 
@@ -235,6 +228,7 @@ def register_routes(app):
                 "game_over": True,
                 "move_history": move_history,
                 "captured_pieces": captured_pieces,
+                "special_moves": special_moves,
                 "material": material_score(board),
                 "evaluation": evaluate_board(board)
             })
@@ -287,6 +281,7 @@ def register_routes(app):
             "game_over": board.is_checkmate() or board.is_stalemate() or board.is_insufficient_material() or board.is_fifty_moves() or board.is_seventyfive_moves() or board.is_fivefold_repetition(),
             "move_history": move_history,
             "captured_pieces": captured_pieces,
+            "special_moves": special_moves,
             "material": material_score(board),
             "evaluation": evaluate_board(board)
         })
@@ -479,10 +474,19 @@ def register_routes(app):
         session['captured_pieces'] = data.get('captured_pieces', {'white': [], 'black': []})
         session['special_moves'] = data.get('special_moves', [])
         session['_test_position_set'] = True
-        session.modified = True
         
-        print(f"[TEST_SET_POSITION] Session keys after setting: {list(session.keys())}")
-        print(f"[TEST_SET_POSITION] Set FEN to: {board.fen()}")
+        # Create/update game for this test position
+        game_id = session.get("game_id")
+        game = db.session.get(Game, game_id) if game_id else None
+        
+        if not game or game.ended_at:
+            # Create new game for this test position
+            new_game = Game(ai_enabled=True)
+            db.session.add(new_game)
+            db.session.commit()
+            session['game_id'] = new_game.id
+        
+        session.modified = True
         
         return jsonify({
             "status": "ok",

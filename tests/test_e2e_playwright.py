@@ -17,15 +17,6 @@ from tests.helper import setup_board_position
 # To see browser: pytest tests/test_e2e_playwright.py --headed
 
 
-@pytest.fixture(scope="session")
-def browser_context_args(browser_context_args):
-    """Configure browser context (viewport, etc)"""
-    return {
-        **browser_context_args,
-        "viewport": {"width": 1280, "height": 1024}
-    }
-
-
 @pytest.fixture
 def live_server(flask_server):
     """
@@ -434,6 +425,11 @@ def test_pawn_promotion_queen_selection_with_setup(page: Page, live_server):
     # Wait extra time to ensure session is fully written to disk
     page.wait_for_timeout(2000)
     
+    # Verify the board loaded the promotion position correctly
+    # Check that white pawn exists on b7
+    b7_piece = page.locator('[data-square="b7"] img')
+    assert b7_piece.count() > 0, "Pawn should be on b7 in promotion position"
+    
     # Instead of dragging, directly show promotion dialog
     page.evaluate("""
         showPromotionDialog(function(selectedPiece) {
@@ -445,18 +441,13 @@ def test_pawn_promotion_queen_selection_with_setup(page: Page, live_server):
     # Wait for the button to appear
     page.wait_for_selector('button[data-piece="q"]')
     
-    # Click Queen button using evaluate
-    page.evaluate("""document.querySelector('button[data-piece="q"]').click()""")
-    page.wait_for_timeout(5000)  # Wait for move to complete and UI to update
+    # Click Queen button and wait for move response
+    with page.expect_response(lambda resp: "/move" in resp.url or "/ai-move" in resp.url) as response_info:
+        page.evaluate("""document.querySelector('button[data-piece="q"]').click()""")
+    response_info.value
     
-    # Verify a8 now has a queen (white or black depending on AI)
-    # Since AI responds, queen might be captured or board changed
-    # So we check move history instead
-    move_history = page.locator("#move-history tr")
-    
-    # Should have original moves plus promotion move
-    # Look for promotion notation (typically includes '=' or '=Q')
-    history_text = page.locator("#move-history").text_content()
+    # Wait for the promotion to appear in special moves (event-driven, not timeout)
+    page.locator("#special-white li, #special-black li").filter(has_text=re.compile(r"Promotion.*Q", re.IGNORECASE)).wait_for(timeout=5000)
     
     # Verify promotion happened by checking special moves
     special_white_locator = page.locator("#special-white li")
@@ -812,8 +803,14 @@ def test_castling_kingside_with_exact_setup(page: Page, live_server):
     # page.locator('[data-square="e1"] .piece-417db').drag_to(
     #     page.locator('[data-square="g1"]')
     # )
-    page.evaluate("""sendMove('e1', 'g1')""")
-    page.wait_for_timeout(2000)
+    
+    # Use wait_for_response to ensure the /move request completes before continuing
+    with page.expect_response(lambda resp: "/move" in resp.url) as response_info:
+        page.evaluate("""sendMove('e1', 'g1')""")
+    response_info.value
+    
+    # Wait for the special moves to be updated (look for the castling text in the DOM)
+    page.locator("#special-white li, #special-black li", has_text="Castling").wait_for()
     
     # Verify king is on g1
     g1_king = page.locator('[data-square="g1"] img')

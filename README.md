@@ -91,12 +91,29 @@ pytest -v
 pytest tests/test_chess_logic.py -v        # Chess engine tests
 pytest tests/test_routes_api.py -v         # API endpoint tests
 pytest tests/test_ai_and_endgames.py -v    # AI behavior tests
+pytest tests/test_e2e_playwright.py -v     # E2E browser tests
 ```
 
 ### Test Coverage
 - **Chess Logic**: Legal moves, captures, special moves, pins, checks
 - **API Routes**: Move validation, session management, game state
 - **AI & Endgames**: AI move selection, checkmate, stalemate, draws
+- **E2E/Browser**: User interactions, UI updates, game flow
+
+### Testing Architecture
+
+**Session Persistence in Tests**:
+- Flask-Session configured with `SESSION_PERMANENT = True` for test suite
+- Sessions persist across page navigations via filesystem storage
+- E2E tests use `page.context.clear_cookies()` at test start for isolation
+- Each test gets fresh cookies while maintaining session integrity
+
+**AI Configuration**:
+- Unit/Integration tests: `AI_ENABLED = False` (isolates player moves)
+- E2E tests: `AI_ENABLED = True` (tests AI behavior)
+- Always configure AI for test scope
+
+See [TESTING_GUIDE.md](TESTING_GUIDE.md) for comprehensive testing documentation.
 
 ## Project Structure
 
