@@ -179,11 +179,10 @@ html, body {
 }
 
 /* Button */
-#reset-btn {
-    display: none;
-    margin-top: auto;
-    padding: 12px;
-    font-size: 1rem;
+#reset-btn {  
+    margin-top: 8px;
+    padding: 10px;
+    font-size: 0.95rem;
     border-radius: 10px;
     border: none;
     background: #2563eb;
@@ -195,7 +194,7 @@ html, body {
     background: #1e40af;
 }
 
-/* Resign Button */
+/* Resign Buttons */
 #resign-btn, #offer-draw-btn, #claim-50-btn, #claim-repetition-btn {
     margin-top: 8px;
     padding: 10px;
