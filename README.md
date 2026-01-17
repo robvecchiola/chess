@@ -200,3 +200,13 @@ pip install -r requirements.txt
 ```bash
 flask run --debug
 ```
+
+**make db changes:**
+```bash
+flask db migrate -m "blah"
+```
+
+**run the db upgrade:**
+```bash
+flask db upgrade
+```
