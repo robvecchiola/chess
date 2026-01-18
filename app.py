@@ -4,6 +4,7 @@ from flask_session import Session
 from extensions import db
 from flask_migrate import Migrate
 from routes import register_routes
+from logging_config import setup_logging
 
 def create_app(config_object=None):
     app = Flask(__name__)
@@ -24,6 +25,13 @@ def create_app(config_object=None):
             app.config.from_object("config.TestingConfig")
         else:
             app.config.from_object("config.DevelopmentConfig")
+
+    # -------------------------------------------------
+    # Setup logging
+    # -------------------------------------------------
+    setup_logging(
+        level="DEBUG" if app.config.get("DEBUG") else "INFO"
+    )
 
     # -------------------------------------------------
     # Extensions

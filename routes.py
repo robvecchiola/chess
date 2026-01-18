@@ -6,6 +6,10 @@ from models import Game, GameMove, db
 from ai import choose_ai_move, material_score, evaluate_board
 from helpers import explain_illegal_move, finalize_game, finalize_game_if_over, get_active_game_or_abort, get_game_state, init_game, log_game_action, save_game_state, execute_move
 
+import logging
+logger = logging.getLogger(__name__)
+import uuid
+
 # -------------------------------------------------------------------
 # Routes
 # -------------------------------------------------------------------
@@ -27,8 +31,6 @@ def register_routes(app):
         # Get current board state to pass to template
         board, move_history, captured_pieces, special_moves = get_game_state()
         initial_position = board.fen()
-        
-        print(f"[HOME] Rendering with FEN: {initial_position}")
         
         status = ""
         if board.is_checkmate():
@@ -65,10 +67,15 @@ def register_routes(app):
 
     @app.route("/move", methods=["POST"])
     def move():
+        move_id = uuid.uuid4().hex[:8]
+
         board, move_history, captured_pieces, special_moves = get_game_state()
         game, is_active = get_active_game_or_abort()
 
+        logger.info("[%s] /move request received", move_id)
+
         if game and not is_active:
+            logger.info("[%s] Move rejected: game already ended", move_id)
             return jsonify({
                 "status": "game_over",
                 "message": "This game has already ended.",
@@ -89,12 +96,10 @@ def register_routes(app):
                 "evaluation": evaluate_board(board)
             }), 400
 
-        print("\n--- DEBUG: MOVE REQUEST ---")
-        print("Session keys:", list(session.keys()))
-        print("Session FEN value:", session.get('fen'))
-        print("Session _test_position_set:", session.get('_test_position_set'))
-        print("Current board FEN:", board.fen())
-        print("Current turn:", "white" if board.turn == chess.WHITE else "black")
+        logger.debug("[%s] Session keys: %s", move_id, list(session.keys()))
+        logger.debug("[%s] Session FEN: %s", move_id, session.get("fen"))
+        logger.debug("[%s] Board FEN: %s", move_id, board.fen())
+        logger.debug("[%s] Turn: %s", move_id, "white" if board.turn else "black")
 
         data = request.get_json()
         from_sq = data.get("from")
@@ -106,22 +111,28 @@ def register_routes(app):
             promotion = promotion.lower()
 
         uci = f"{from_sq}{to_sq}{promotion}" if promotion else f"{from_sq}{to_sq}"
-        print("Move received (UCI):", uci)
+        logger.info("[%s] UCI move received: %s", move_id, uci)
 
         try:
             move = chess.Move.from_uci(uci)
-            print("Parsed move object:", move)
 
             if move not in board.legal_moves:
                 reason = explain_illegal_move(board, move)
                 
                 # 🔧 ENHANCED LOGGING FOR ILLEGAL MOVES
-                print("ILLEGAL MOVE DETECTED")
-                print(f"   From: {from_sq} → To: {to_sq}")
-                print(f"   UCI: {uci}")
-                print(f"   Reason: {reason}")
-                print(f"   Legal moves: {[m.uci() for m in list(board.legal_moves)[:10]]}...")  # Show first 10
-                print("--- END DEBUG ---\n")
+                logger.warning(
+                    "[%s] Illegal move | uci=%s | reason=%s | fen=%s",
+                    move_id,
+                    uci,
+                    reason,
+                    board.fen(),
+                )
+
+                logger.debug(
+                    "[%s] Legal moves (sample): %s",
+                    move_id,
+                    [m.uci() for m in list(board.legal_moves)[:10]],
+                )
 
                 return jsonify({
                     "status": "illegal",
@@ -130,10 +141,19 @@ def register_routes(app):
                     "evaluation": evaluate_board(board)
                 })
             
-            print("Move is LEGAL, executing...")
+            logger.info("[%s] Legal move accepted", move_id)
             
             # Execute the move
             execute_move(board, move, move_history, captured_pieces, special_moves)
+
+            if move.promotion:
+                logger.info(
+                    "[%s] Pawn promotion to %s",
+                    move_id,
+                    chess.piece_name(move.promotion),
+                )
+
+            logger.debug("[%s] Board after move: %s", move_id, board.fen())
 
             #add to the db
             game_id = session.get("game_id")
@@ -152,8 +172,6 @@ def register_routes(app):
             if game:
                 finalize_game_if_over(board, game)
                 
-            print(f"Board after player move: {board.fen()}")
-
             # Clear test position flag if it was set (after first move)
             session.pop('_test_position_set', None)
             
@@ -163,12 +181,7 @@ def register_routes(app):
             material = material_score(board)
             evaluation = evaluate_board(board)
 
-            print(f"\nFinal board state: {board.fen()}")
-            print(f"Move history: {move_history}")
-            print(f"Game over: {board.is_game_over()}")
-            print(f"material score: {material}")
-            print(f"evaluation score: {evaluation}")
-            print("--- END DEBUG ---\n")
+            logger.info("[%s] Move complete | material=%s | eval=%s", move_id, material, evaluation)
 
             response_data = {
                 "status": "ok",
@@ -191,10 +204,8 @@ def register_routes(app):
             return jsonify(response_data)
 
         except Exception as e:
-            print("\nEXCEPTION IN /move ENDPOINT")
-            print(f"   Error: {e}")
-            print(f"   Move data: from={from_sq}, to={to_sq}, promotion={promotion}")
-            print("--- END DEBUG ---\n")
+            logger.exception("[%s] Exception while processing move", move_id)
+
             return jsonify({
                 "status": "illegal", 
                 "message": str(e), 
@@ -233,17 +244,17 @@ def register_routes(app):
                 "evaluation": evaluate_board(board)
             })
 
-        print("\nAI MOVE:")
+        logger.info("AI move requested")
         try:
             ai_move = choose_ai_move(board, depth=2)
             if ai_move is None:
-                print("   WARNING: AI returned None, using random move")
+                logger.error("AI error, falling back to random move", exc_info=True)
                 ai_move = random.choice(list(board.legal_moves))
-                print(f"   Random move: {ai_move.uci()}")
+                logger.info(f"AI selected move: {ai_move.uci()}")
         except Exception as e:
-            print(f"   ERROR in AI: {e}")
+            logger.error("ERROR in AI", exc_info=True)
             ai_move = random.choice(list(board.legal_moves))
-            print(f"   Fallback random move: {ai_move.uci()}")
+            logger.info(f"Fallback random move: {ai_move.uci()}")
         
         # Execute the AI move
         execute_move(board, ai_move, move_history, captured_pieces, special_moves, is_ai=True)
@@ -289,7 +300,7 @@ def register_routes(app):
     # reset route
     @app.route("/reset", methods=["POST"])
     def reset():
-        print("\nRESET GAME")
+        logger.info("Game reset requested")
         game_id = session.get("game_id")
         if game_id:
             game = db.session.get(Game, game_id)
@@ -297,7 +308,6 @@ def register_routes(app):
                 finalize_game(game, "*", "abandoned")
         session.clear()  # This also clears _test_position_set flag
         init_game()
-        print("--- END DEBUG ---\n")
 
         return jsonify({
             "status": "ok",
@@ -347,6 +357,7 @@ def register_routes(app):
 
         finalize_game(game, result, "resignation")
         db.session.commit()
+        logger.info("Game resigned by %s", resigning_color)
 
         session.pop("fen", None)
         session.pop("move_history", None)
@@ -380,8 +391,9 @@ def register_routes(app):
         )
 
         finalize_game(game, "1/2-1/2", "draw_50_move_rule")
+        logger.info("Draw claimed by 50-move rule")
         return jsonify({"status": "ok", "result": game.result})
-
+  
     # claim threefold repetition draw
     @app.route("/claim-draw/repetition", methods=["POST"])
     def claim_repetition_draw():
@@ -401,6 +413,7 @@ def register_routes(app):
         )
 
         finalize_game(game, "1/2-1/2", "draw_threefold_repetition")
+        logger.info("Draw claimed: threefold repetition")
         return jsonify({"status": "ok", "result": game.result})
     
     #dra agreement route
@@ -419,6 +432,7 @@ def register_routes(app):
         )
 
         finalize_game(game, "1/2-1/2", "draw_by_agreement")
+        logger.info("Draw agreed by both players")
         return jsonify({"status": "ok", "result": game.result})
 
     ###### route for testing purposes only ######

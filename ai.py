@@ -1,8 +1,9 @@
 import chess
 import math
-
 from constants import PIECE_TABLES, PIECE_VALUES
+import logging
 
+logger = logging.getLogger(__name__)
 
 def evaluate_board(board):
     if board.is_checkmate():
@@ -107,6 +108,13 @@ def order_moves(board):
 def choose_ai_move(board, depth=2):
     """Choose the best move using minimax with alpha-beta pruning"""
     # Note: depth=2 with quiescence search is roughly equivalent to depth=3-4 without it
+    logger.debug(
+        "AI evaluating position | turn=%s | depth=%s | fen=%s",
+        "white" if board.turn else "black",
+        depth,
+        board.fen()
+    )
+
     best_move = None
     
     # Determine if current player is white (maximizing) or black (minimizing)
@@ -133,6 +141,15 @@ def choose_ai_move(board, depth=2):
                 best_value = value
                 best_move = move
     
+    if best_move is None:
+        logger.error("AI failed to select a move | fen=%s", board.fen())
+    else:
+        logger.info(
+            "AI selected move | uci=%s | turn=%s",
+            best_move.uci(),
+            "white" if board.turn else "black",
+        )
+
     return best_move
 
 #material thing

@@ -4,6 +4,9 @@ from extensions import db
 import chess
 
 from models import Game, GameMove
+import logging
+
+logger = logging.getLogger(__name__)
 # -------------------------------------------------------------------
 # Session Helpers
 # -------------------------------------------------------------------
@@ -13,6 +16,8 @@ def init_game():
     game = Game(ai_enabled=True)
     db.session.add(game)
     db.session.commit()
+
+    logger.info("New game initialized | game_id=%s", game.id)
 
     session["game_id"] = game.id
     session['fen'] = board.fen()
@@ -35,6 +40,7 @@ def get_game_state():
     try:
         board = chess.Board(session.get('fen', chess.STARTING_FEN))
     except ValueError:
+        logger.warning("Invalid FEN in session, resetting board")
         board = chess.Board()
 
     # Try to rebuild from move history for position history (repetition detection)
@@ -44,8 +50,9 @@ def get_game_state():
             for san in move_history:
                 temp_board.push_san(san)
             board = temp_board
-        except Exception:
-            pass  # Keep the board from FEN or starting position
+        except Exception as e:
+            logger.debug("Failed to rebuild board from move history | error=%s", e)
+            pass
 
     return board, move_history, captured_pieces, special_moves
 
@@ -56,12 +63,21 @@ def save_game_state(board, move_history, captured_pieces, special_moves):
     session['captured_pieces'] = captured_pieces
     session['special_moves'] = special_moves
 
+    logger.debug("Game state saved | fen=%s", board.fen())
+
 
 def execute_move(board, move, move_history, captured_pieces, special_moves, is_ai=False):
     """
     Execute a move on the board, updating history, captures, and special moves.
     For AI moves, apply promotion safety net if needed.
     """
+
+    logger.debug(
+        "Executing move | uci=%s | ai=%s",
+        move.uci(),
+        is_ai
+    )
+
     # Detect special move
     special_move = None
     if board.is_castling(move):
@@ -70,6 +86,9 @@ def execute_move(board, move, move_history, captured_pieces, special_moves, is_a
         special_move = "En Passant"
     elif move.promotion:
         special_move = f"Promotion to {chess.piece_symbol(move.promotion).upper()}"
+    
+    if special_move:
+        logger.info("Special move executed | type=%s", special_move)
     
     # SAN before push
     move_san = board.san(move)
@@ -264,7 +283,15 @@ def explain_illegal_move(board, move):
 
 def finalize_game(game, result, reason):
     if game.ended_at is not None:
-        return 
+        return
+    
+    logger.info(
+        "Game finalized | game_id=%s | result=%s | reason=%s",
+        game.id,
+        result,
+        reason
+    )
+
     game.result = result
     game.termination_reason = reason
     game.ended_at = datetime.now(timezone.utc)
@@ -302,6 +329,12 @@ def finalize_game_if_over(board, game):
         return False
 
     finalize_game(game, result, reason)
+
+    logger.info(
+        "Game over detected | game_id=%s | reason=%s",
+        game.id,
+        reason
+    )
     return True
 
 
@@ -339,3 +372,10 @@ def log_game_action(game, board, label):
         uci=None,
         fen_after=board.fen()
     ))
+    db.session.commit()
+
+    logger.info(
+        "Game action logged | game_id=%s | action=%s",
+        game.id,
+        label
+    )
