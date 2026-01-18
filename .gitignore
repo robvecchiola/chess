@@ -208,3 +208,5 @@ __marimo__/
 
 # Flask-Session file-based sessions
 flask_session/
+
+.vscode/

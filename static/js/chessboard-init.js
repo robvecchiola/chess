@@ -1,14 +1,16 @@
 $(document).ready(function () {
 
+    const config = window.CHESS_CONFIG || {};
+
     let board;
     let pendingPromotion = null;
     let lastPosition = null;
-    let currentTurn = window.initialTurn || 'white';
+    let currentTurn = config.turn || 'white';
     let isGameOver = false;
     let aiThinking = false;
 
     // Use initial position from backend, fallback to 'start'
-    let initialPosition = window.initialFen || 'start';
+    let initialPosition = config.fen || 'start';
 
     board = Chessboard('board', {
         draggable: true,
@@ -51,19 +53,19 @@ $(document).ready(function () {
     window.board = board;
 
     // Initialize UI with backend values
-    updateSpecialMove(window.initialSpecialMoves || []);
-    updateMoveHistory(window.initialMoveHistory || []);
-    updateCaptured(window.initialCapturedPieces || { white: [], black: [] });
-    updateMaterialAdvantage(Number(window.initialMaterial) || 0);
-    updatePositionEvaluation(Number(window.initialEvaluation) || 0);
+    updateSpecialMove(config.specialMoves || []);
+    updateMoveHistory(config.moveHistory || []);
+    updateCaptured(config.capturedPieces || { white: [], black: [] });
+    updateMaterialAdvantage(Number(config.material) || 0);
+    updatePositionEvaluation(Number(config.evaluation) || 0);
 
     // 🔑 INITIALIZE BUTTON VISIBILITY - Hide New Game, show Resign/Draw on page load
     // Only hide reset if game is active (not game over)
-    const initialGameState = window.initialGameOver ? 'game_over' : 'game_active';
+    const initialGameState = config.gameOver ? 'game_over' : 'game_active';
     updateButtonVisibility(initialGameState);
 
     // If it's AI's turn on page load, trigger AI move
-    if (currentTurn === 'black' && window.aiEnabled && !isGameOver) {
+    if (currentTurn === 'black' && config.aiEnabled && !isGameOver) {
         aiThinking = true;
         board.draggable = false;
         $.post("/ai-move", function(aiResponse) {

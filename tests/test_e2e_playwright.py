@@ -243,33 +243,26 @@ def test_cannot_drag_opponent_pieces(page: Page, live_server):
 def test_special_moves_display(page: Page, live_server):
     """Test that special moves (castling, en passant) are displayed"""
     page.goto(live_server)
-    page.wait_for_selector("#board")
-    page.wait_for_timeout(500)
     
-    # Set up castling via moves
-    # 1. e4
-    page.locator('[data-square="e2"] .piece-417db').drag_to(
-        page.locator('[data-square="e4"]')
-    )
-    page.wait_for_timeout(2000)
+    # Set up position where castling is legal: king and rook in place, path clear
+    castling_fen = "rnbqkbnr/pppppppp/8/8/2B5/5N2/PPPPPPPP/RNBQK2R w KQkq - 0 1"
     
-    # 2. Nf3
-    page.locator('[data-square="g1"] .piece-417db').drag_to(
-        page.locator('[data-square="f3"]')
+    setup_board_position(
+        page,
+        castling_fen,
+        move_history=[],
+        captured_pieces={"white": [], "black": []},
+        special_moves=[]
     )
-    page.wait_for_timeout(2000)
     
-    # 3. Be2
-    page.locator('[data-square="f1"] .piece-417db').drag_to(
-        page.locator('[data-square="e2"]')
-    )
+    # Wait for board to render
     page.wait_for_timeout(2000)
+    page.wait_for_selector('[data-square="e1"]')
     
-    # 4. Castle kingside (O-O)
-    page.locator('[data-square="e1"] .piece-417db').drag_to(
-        page.locator('[data-square="g1"]')
-    )
-    page.wait_for_timeout(2000)
+    # Perform castling kingside: e1 to g1
+    with page.expect_response(lambda resp: "/move" in resp.url) as response_info:
+        page.evaluate("""sendMove('e1', 'g1')""")
+    response_info.value
     
     # Wait for special moves to update
     page.wait_for_timeout(1000)
@@ -572,17 +565,18 @@ def test_check_status_displays_with_setup(page: Page, live_server):
         special_moves=[]
     )
     
-    # Wait for board to render
+    # Wait for board to render with pieces
     page.wait_for_timeout(2000)
-    page.wait_for_selector('#board')
+    page.wait_for_selector('[data-square="e5"]')
+    page.wait_for_selector('.piece-417db', timeout=5000)
     
     # Verify board renders with correct position
     board = page.locator("#board")
     expect(board).to_be_visible()
     
-    # Verify queen is on e5
-    e5_queen = page.locator('[data-square="e5"] img')
-    expect(e5_queen).to_have_count(1)
+    # Verify queen is on e5 (wait for it to appear)
+    e5_queen = page.locator('[data-square="e5"] .piece-417db')
+    expect(e5_queen).to_have_count(1, timeout=5000)
     
     # Verify status shows "Check!"
     status = page.locator("#game-status")

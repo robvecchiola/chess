@@ -119,16 +119,17 @@
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script src="{{ url_for('static', filename='js/chessboard-1.0.0.min.js') }}"></script>
     <script>
-        // Pass initial values from backend to JavaScript
-        window.initialFen = '{{ initial_position }}';
-        window.initialMaterial = '{{ initial_material | default(0) }}';
-        window.initialEvaluation = '{{ initial_evaluation | default(0) }}';
-        window.initialMoveHistory = '{{ initial_move_history | tojson }}';
-        window.initialCapturedPieces = '{{ initial_captured_pieces | tojson }}';
-        window.initialSpecialMoves = '{{ initial_special_moves | tojson }}';
-        window.initialTurn = '{{ initial_turn }}';
-        window.aiEnabled = '{{ ai_enabled | lower }}';
-        window.initialGameOver = '{{ initial_game_over | lower }}' === 'true';
+        window.CHESS_CONFIG = {
+            fen: {{ initial_position | tojson }},
+            material: {{ initial_material | default(0) }},
+            evaluation: {{ initial_evaluation | default(0) }},
+            moveHistory: {{ initial_move_history | tojson }},
+            capturedPieces: {{ initial_captured_pieces | tojson }},
+            specialMoves: {{ initial_special_moves | tojson }},
+            turn: {{ initial_turn | tojson }},
+            aiEnabled: {{ ai_enabled | tojson }},
+            gameOver: {{ initial_game_over | tojson }}
+        };
     </script>
     <script src="{{ url_for('static', filename='js/chessboard-init.js') }}"></script>
 </body>
