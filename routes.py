@@ -30,9 +30,12 @@ def register_routes(app):
         should_clear = 'fen' not in session
         
         if should_clear:
+            logger.info("Initializing new game session")
             session.clear()
             session.modified = True
             init_game()
+        else:
+            logger.debug("Loading existing game session | game_id=%s", session.get("game_id"))
         # Session FEN will be preserved across requests as long as it exists
         
         # Get current board state to pass to template
@@ -251,17 +254,17 @@ def register_routes(app):
                 "evaluation": evaluate_board(board)
             })
 
-        logger.info("AI move requested")
+        logger.info("AI move requested | game_id=%s", session.get("game_id"))
         try:
             ai_move = choose_ai_move(board, depth=2)
             if ai_move is None:
                 logger.error("AI error, falling back to random move", exc_info=True)
                 ai_move = random.choice(list(board.legal_moves))
-                logger.info(f"AI selected move: {ai_move.uci()}")
+                logger.info("AI fallback move selected | uci=%s", ai_move.uci())
         except Exception as e:
-            logger.error("ERROR in AI", exc_info=True)
+            logger.error("AI selection failed, falling back to random move", exc_info=True)
             ai_move = random.choice(list(board.legal_moves))
-            logger.info(f"Fallback random move: {ai_move.uci()}")
+            logger.info("Fallback random move selected | uci=%s", ai_move.uci())
         
         # Execute the AI move
         execute_move(board, ai_move, move_history, captured_pieces, special_moves, is_ai=True)
@@ -307,13 +310,15 @@ def register_routes(app):
     # reset route
     @app.route("/reset", methods=["POST"])
     def reset():
-        logger.info("Game reset requested")
         game_id = session.get("game_id")
+        logger.info("Game reset requested | game_id=%s", game_id)
         if game_id:
             game = db.session.get(Game, game_id)
             if game and game.ended_at is None:
+                logger.info("Abandoning active game | game_id=%s", game_id)
                 finalize_game(game, "*", "abandoned")
         session.clear()  # This also clears _test_position_set flag
+        logger.debug("Session cleared and new game initialized")
         init_game()
 
         return jsonify({
@@ -339,10 +344,12 @@ def register_routes(app):
     def resign():
         game_id = session.get("game_id")
         if not game_id:
+            logger.warning("Resign attempt without active game")
             return jsonify({"status": "error", "message": "No active game"}), 400
 
         game = db.session.get(Game, game_id)
         if not game or game.ended_at:
+            logger.warning("Resign attempt on ended game | game_id=%s", game_id)
             return jsonify({"status": "error", "message": "Game already ended"}), 400
 
         board, *_ = get_game_state()
@@ -351,6 +358,7 @@ def register_routes(app):
         resigning_color = data.get("color")  # "white" or "black"
 
         if resigning_color not in ("white", "black"):
+            logger.warning("Resign attempt with invalid color | color=%s | game_id=%s", resigning_color, game_id)
             return jsonify({"status": "error", "message": "Invalid color"}), 400
 
         winner = "black" if resigning_color == "white" else "white"
@@ -364,7 +372,7 @@ def register_routes(app):
 
         finalize_game(game, result, "resignation")
         db.session.commit()
-        logger.info("Game resigned by %s", resigning_color)
+        logger.info("Game resigned | game_id=%s | resigning_color=%s | winner=%s", game_id, resigning_color, winner)
 
         session.pop("fen", None)
         session.pop("move_history", None)
@@ -382,13 +390,16 @@ def register_routes(app):
     # 50-move rule draw claim
     @app.route("/claim-draw/50-move", methods=["POST"])
     def claim_50_move_draw():
+        game_id = session.get("game_id")
         board, *_ = get_game_state()
-        game = db.session.get(Game, session.get("game_id"))
+        game = db.session.get(Game, game_id)
 
         if not game or game.ended_at:
+            logger.warning("50-move draw claim on ended game | game_id=%s", game_id)
             return jsonify({"status": "game_over"})
 
         if not board.is_fifty_moves():
+            logger.debug("50-move draw claim invalid | game_id=%s | halfmove_clock=%s", game_id, board.halfmove_clock)
             return jsonify({"status": "invalid", "reason": "not_claimable"})
         
         log_game_action(
@@ -398,19 +409,22 @@ def register_routes(app):
         )
 
         finalize_game(game, "1/2-1/2", "draw_50_move_rule")
-        logger.info("Draw claimed by 50-move rule")
+        logger.info("Draw claimed by 50-move rule | game_id=%s", game_id)
         return jsonify({"status": "ok", "result": game.result})
   
     # claim threefold repetition draw
     @app.route("/claim-draw/repetition", methods=["POST"])
     def claim_repetition_draw():
+        game_id = session.get("game_id")
         board, *_ = get_game_state()
-        game = db.session.get(Game, session.get("game_id"))
+        game = db.session.get(Game, game_id)
 
         if not game or game.ended_at:
+            logger.warning("Repetition draw claim on ended game | game_id=%s", game_id)
             return jsonify({"status": "game_over"})
 
         if not board.can_claim_threefold_repetition():
+            logger.debug("Repetition draw claim invalid | game_id=%s", game_id)
             return jsonify({"status": "invalid", "reason": "not_claimable"})
         
         log_game_action(
@@ -420,16 +434,18 @@ def register_routes(app):
         )
 
         finalize_game(game, "1/2-1/2", "draw_threefold_repetition")
-        logger.info("Draw claimed: threefold repetition")
+        logger.info("Draw claimed by threefold repetition | game_id=%s", game_id)
         return jsonify({"status": "ok", "result": game.result})
     
-    #dra agreement route
+    # draw agreement route
     @app.route("/draw-agreement", methods=["POST"])
     def draw_agreement():
+        game_id = session.get("game_id")
         board, *_ = get_game_state()
-        game = db.session.get(Game, session.get("game_id"))
+        game = db.session.get(Game, game_id)
 
         if not game or game.ended_at:
+            logger.warning("Draw agreement on ended game | game_id=%s", game_id)
             return jsonify({"status": "game_over"})
         
         log_game_action(
@@ -439,7 +455,7 @@ def register_routes(app):
         )
 
         finalize_game(game, "1/2-1/2", "draw_by_agreement")
-        logger.info("Draw agreed by both players")
+        logger.info("Draw agreed by both players | game_id=%s", game_id)
         return jsonify({"status": "ok", "result": game.result})
 
     ###### route for testing purposes only ######
@@ -459,18 +475,22 @@ def register_routes(app):
         """
         # SECURITY: Only allow in testing mode
         if not app.config.get('TESTING', False):
+            logger.warning("Test endpoint /test/set_position accessed outside testing mode")
             return jsonify({"error": "Endpoint only available in testing mode"}), 403
         
         data = request.get_json()
         fen = data.get('fen')
         
         if not fen:
+            logger.warning("Test set_position: FEN not provided")
             return jsonify({"error": "FEN required"}), 400
         
         # Validate FEN
         try:
             test_board = chess.Board(fen)
+            logger.debug("[TEST] Setting board position | fen=%s", fen)
         except ValueError as e:
+            logger.error("[TEST] Invalid FEN provided | fen=%s | error=%s", fen, str(e))
             return jsonify({"error": f"Invalid FEN: {str(e)}"}), 400
         
         # Create board without castling rights to preserve empty squares
@@ -506,6 +526,9 @@ def register_routes(app):
             db.session.add(new_game)
             db.session.commit()
             session['game_id'] = new_game.id
+            logger.debug("[TEST] Created new test game | game_id=%s", new_game.id)
+        else:
+            logger.debug("[TEST] Reusing existing test game | game_id=%s", game.id)
         
         session.modified = True
         

@@ -283,6 +283,7 @@ def explain_illegal_move(board, move):
 
 def finalize_game(game, result, reason):
     if game.ended_at is not None:
+        logger.debug("Game already finalized | game_id=%s", game.id)
         return
     
     logger.info(
