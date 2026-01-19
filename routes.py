@@ -2,6 +2,7 @@ from flask import render_template, request, jsonify, session
 import chess
 import random
 from models import Game, GameMove, db
+from datetime import datetime
 
 from ai import choose_ai_move, material_score, evaluate_board
 from helpers import explain_illegal_move, finalize_game, finalize_game_if_over, get_active_game_or_abort, get_game_state, init_game, log_game_action, save_game_state, execute_move
@@ -15,6 +16,12 @@ import uuid
 # -------------------------------------------------------------------
 
 def register_routes(app):
+
+    @app.before_request
+    def track_activity():
+        if request.endpoint != "static":
+            session["last_activity"] = datetime.utcnow().isoformat()
+            session.modified = True
 
     @app.route("/")
     def home():
