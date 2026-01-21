@@ -1,6 +1,4 @@
 from datetime import datetime
-
-from sqlalchemy import func
 from extensions import db
 
 class Game(db.Model):
@@ -22,7 +20,7 @@ class GameMove(db.Model):
     __tablename__ = 'game_moves'
     id = db.Column(db.Integer, primary_key=True)
 
-    game_id = db.Column(db.Integer, db.ForeignKey("game.id"), nullable=False)
+    game_id = db.Column(db.Integer, db.ForeignKey("game.id", ondelete="CASCADE"), nullable=False)
     move_number = db.Column(db.Integer, nullable=False)
 
     color = db.Column(db.String(5))  # "white" or "black"
