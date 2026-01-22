@@ -1,6 +1,9 @@
 import os
 import sys
 from datetime import datetime, timedelta
+import sys
+
+print("Using Python:", sys.executable)
 
 # -------------------------------------------------
 # Ensure app imports work
