@@ -1,5 +1,6 @@
 from datetime import datetime
 from extensions import db
+import uuid
 
 class Game(db.Model):
     __tablename__ = 'game'
@@ -7,13 +8,18 @@ class Game(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     started_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     ended_at = db.Column(db.DateTime, nullable=True)
+    last_activity_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
+
+    # Lifecycle
+    state = db.Column(db.String(20), nullable=False, default="active", index=True)
 
     result = db.Column(db.String(20))  # "1-0", "0-1", "1/2-1/2"
     termination_reason = db.Column(db.String(50))  # checkmate, stalemate, resign
 
     ai_enabled = db.Column(db.Boolean, default=True)
 
-    # Optional for later
+    # identity
+    player_uuid = db.Column(db.String(36), nullable=False, index=True, default=lambda: str(uuid.uuid4()))
     user_id = db.Column(db.Integer, nullable=True)
 
 class GameMove(db.Model):
