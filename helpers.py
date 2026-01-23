@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+import uuid
 from flask import session
 from extensions import db
 import chess
@@ -13,17 +14,31 @@ logger = logging.getLogger(__name__)
 
 def init_game():
     board = chess.Board()
-    game = Game(ai_enabled=True)
+
+    player_uuid = get_or_create_player_uuid()
+    now = datetime.now(timezone.utc)
+
+    game = Game(
+        ai_enabled=True,
+        player_uuid=player_uuid,
+        state="active",
+        last_activity_at=now,
+    )
+
     db.session.add(game)
     db.session.commit()
 
-    logger.info("New game initialized | game_id=%s", game.id)
+    logger.info(
+        "New game initialized | game_id=%s | player_uuid=%s",
+        game.id,
+        player_uuid,
+    )
 
     session["game_id"] = game.id
-    session['fen'] = board.fen()
-    session['move_history'] = []
-    session['captured_pieces'] = {'white': [], 'black': []}
-    session['special_moves'] = []
+    session["fen"] = board.fen()
+    session["move_history"] = []
+    session["captured_pieces"] = {"white": [], "black": []}
+    session["special_moves"] = []
 
 
 def get_game_state():
@@ -285,7 +300,9 @@ def finalize_game(game, result, reason):
     if game.ended_at is not None:
         logger.debug("Game already finalized | game_id=%s", game.id)
         return
-    
+
+    now = datetime.now(timezone.utc)
+
     logger.info(
         "Game finalized | game_id=%s | result=%s | reason=%s",
         game.id,
@@ -295,7 +312,10 @@ def finalize_game(game, result, reason):
 
     game.result = result
     game.termination_reason = reason
-    game.ended_at = datetime.now(timezone.utc)
+    game.ended_at = now
+    game.state = "finished"
+    game.last_activity_at = now
+
     db.session.commit()
 
 def finalize_game_if_over(board, game):
@@ -349,10 +369,11 @@ def get_active_game_or_abort():
     if not game:
         return None, None
 
-    if game.ended_at is not None:
+    if game.state != "active":
         return game, False
 
     return game, True
+
 
 #log game actions resign and clams
 def log_game_action(game, board, label):
@@ -380,3 +401,16 @@ def log_game_action(game, board, label):
         game.id,
         label
     )
+
+# create player uuid
+def get_or_create_player_uuid():
+    if "player_uuid" not in session:
+        session["player_uuid"] = str(uuid.uuid4())
+        session.modified = True
+    return session["player_uuid"]
+
+
+# update last move date/time
+def touch_game(game):
+    game.last_activity_at = datetime.now(timezone.utc)
+    db.session.commit()

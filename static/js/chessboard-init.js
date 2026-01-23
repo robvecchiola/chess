@@ -1,6 +1,7 @@
 $(document).ready(function () {
 
     const config = window.CHESS_CONFIG || {};
+    const playerColor = "white"; // later this comes from auth/session
 
     let board;
     let pendingPromotion = null;
@@ -553,7 +554,7 @@ $(document).ready(function () {
             url: "/resign",
             type: "POST",
             contentType: "application/json",
-            data: JSON.stringify({ color: currentTurn }),
+            data: JSON.stringify({ color: playerColor }),
             success: function (response) {
                 if (response.status === "ok") {
                     updateStatus(

@@ -5,7 +5,7 @@ from models import Game, GameMove, db
 from datetime import datetime
 
 from ai import choose_ai_move, material_score, evaluate_board
-from helpers import explain_illegal_move, finalize_game, finalize_game_if_over, get_active_game_or_abort, get_game_state, init_game, log_game_action, save_game_state, execute_move
+from helpers import explain_illegal_move, finalize_game, finalize_game_if_over, get_active_game_or_abort, get_game_state, get_or_create_player_uuid, init_game, log_game_action, save_game_state, execute_move, touch_game
 
 import logging
 logger = logging.getLogger(__name__)
@@ -181,6 +181,8 @@ def register_routes(app):
                 db.session.commit()
             if game:
                 finalize_game_if_over(board, game)
+            if game:
+                touch_game(game)
                 
             # Clear test position flag if it was set (after first move)
             session.pop('_test_position_set', None)
@@ -285,6 +287,8 @@ def register_routes(app):
         
         if game:
             finalize_game_if_over(board, game)
+        if game:
+            touch_game(game)
         # --- END DB LOGGING ---
 
         save_game_state(board, move_history, captured_pieces, special_moves)
@@ -317,6 +321,9 @@ def register_routes(app):
             if game and game.ended_at is None:
                 logger.info("Abandoning active game | game_id=%s", game_id)
                 finalize_game(game, "*", "abandoned")
+                game.state = "abandoned"
+                db.session.commit()
+                touch_game(game)
         session.clear()  # This also clears _test_position_set flag
         logger.debug("Session cleared and new game initialized")
         init_game()
@@ -372,6 +379,8 @@ def register_routes(app):
 
         finalize_game(game, result, "resignation")
         db.session.commit()
+        if game:
+            touch_game(game)
         logger.info("Game resigned | game_id=%s | resigning_color=%s | winner=%s", game_id, resigning_color, winner)
 
         session.pop("fen", None)
@@ -409,6 +418,8 @@ def register_routes(app):
         )
 
         finalize_game(game, "1/2-1/2", "draw_50_move_rule")
+        if game:
+            touch_game(game)
         logger.info("Draw claimed by 50-move rule | game_id=%s", game_id)
         return jsonify({"status": "ok", "result": game.result})
   
@@ -434,6 +445,8 @@ def register_routes(app):
         )
 
         finalize_game(game, "1/2-1/2", "draw_threefold_repetition")
+        if game:
+            touch_game(game)
         logger.info("Draw claimed by threefold repetition | game_id=%s", game_id)
         return jsonify({"status": "ok", "result": game.result})
     
@@ -455,6 +468,8 @@ def register_routes(app):
         )
 
         finalize_game(game, "1/2-1/2", "draw_by_agreement")
+        if game:
+            touch_game(game)
         logger.info("Draw agreed by both players | game_id=%s", game_id)
         return jsonify({"status": "ok", "result": game.result})
 
@@ -522,7 +537,12 @@ def register_routes(app):
         
         if not game or game.ended_at:
             # Create new game for this test position
-            new_game = Game(ai_enabled=True)
+            new_game = Game(
+                ai_enabled=True,
+                player_uuid=get_or_create_player_uuid(),
+                state="active",
+                last_activity_at=datetime.utcnow(),
+            )
             db.session.add(new_game)
             db.session.commit()
             session['game_id'] = new_game.id
