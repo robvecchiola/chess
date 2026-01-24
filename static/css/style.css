@@ -23,13 +23,12 @@ html, body {
 /* App layout */
 .chess-app {
     display: grid;
-    grid-template-columns: auto 320px;
+    grid-template-columns: 220px auto 320px;
     gap: 20px;
     justify-content: center;
     padding: 20px;
-    height: calc(100vh - 70px); /* adjust if title size changes */
-    align-items: stretch;
 }
+
 
 /* Board */
 .board-container {
@@ -476,4 +475,28 @@ html, body {
     .app-title {
         display: none; /* reclaim vertical space */
     }
+}
+
+.ai-record-card .record-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.95rem;
+    margin: 4px 0;
+}
+
+.ai-record-card .total {
+    margin-top: 6px;
+    font-weight: 600;
+}
+
+.ai-record-card {
+    position: sticky;
+    top: 20px;
+}
+
+.left-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    align-items: stretch;
 }

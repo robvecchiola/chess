@@ -5,7 +5,7 @@ from models import Game, GameMove, db
 from datetime import datetime
 
 from ai import choose_ai_move, material_score, evaluate_board
-from helpers import explain_illegal_move, finalize_game, finalize_game_if_over, get_active_game_or_abort, get_game_state, get_or_create_player_uuid, init_game, log_game_action, save_game_state, execute_move, touch_game
+from helpers import explain_illegal_move, finalize_game, finalize_game_if_over, get_active_game_or_abort, get_ai_record, get_game_state, get_or_create_player_uuid, init_game, log_game_action, save_game_state, execute_move, touch_game
 
 import logging
 logger = logging.getLogger(__name__)
@@ -472,6 +472,11 @@ def register_routes(app):
             touch_game(game)
         logger.info("Draw agreed by both players | game_id=%s", game_id)
         return jsonify({"status": "ok", "result": game.result})
+    
+    ##### route to get AI record ######
+    @app.route("/stats/ai-record")
+    def ai_record():
+        return get_ai_record()
 
     ###### route for testing purposes only ######
     @app.route("/test/set_position", methods=["POST"])

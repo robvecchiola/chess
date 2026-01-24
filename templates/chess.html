@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>rob' Flask Chess AI</title>
+    <title>Rob Vecchiola's AI Chessmania</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/chessboard-1.0.0.min.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <link rel="shortcut icon" href="{{ url_for('static', filename='favicon.png') }}" type="image/x-icon">
@@ -9,9 +9,35 @@
 </head>
 <body>
 
-    <h1 class="app-title">rob's Flask Chess AI ♟️</h1>
+    <h1 class="app-title">Rob Vecchiola's AI Chessmania ♟️</h1>
 
     <div class="chess-app">
+        <div class="left-panel">
+            <div class="card ai-record-card">
+                <h3>🤖 AI vs Humanoids</h3>
+
+                <div class="record-row">
+                    <span>Wins</span>
+                    <span id="ai-wins">–</span>
+                </div>
+
+                <div class="record-row">
+                    <span>Losses</span>
+                    <span id="ai-losses">–</span>
+                </div>
+
+                <div class="record-row">
+                    <span>Draws</span>
+                    <span id="ai-draws">–</span>
+                </div>
+
+                <div class="record-row total">
+                    <span>Win Rate</span>
+                    <span id="ai-winrate">–</span>
+                </div>
+            </div>
+        </div>
+
         <div class="board-container">
             <div id="board"></div>
 

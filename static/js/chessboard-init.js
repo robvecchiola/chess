@@ -13,6 +13,17 @@ $(document).ready(function () {
     // Use initial position from backend, fallback to 'start'
     let initialPosition = config.fen || 'start';
 
+    function loadAIRecord() {
+        $.get("/stats/ai-record", function (data) {
+            $("#ai-wins").text(data.wins);
+            $("#ai-losses").text(data.losses);
+            $("#ai-draws").text(data.draws);
+            $("#ai-winrate").text(`${data.win_rate}%`);
+        });
+    }
+
+    loadAIRecord();
+
     board = Chessboard('board', {
         draggable: true,
         position: initialPosition,
@@ -282,6 +293,7 @@ $(document).ready(function () {
             drawBtn.hide();
             claim50Btn.hide();
             claimRepBtn.hide();
+            loadAIRecord()
         }
     }
 
@@ -305,6 +317,7 @@ $(document).ready(function () {
                 updateButtonVisibility('game_active');
             }
         });
+        loadAIRecord()
     });
 
     function updateStatus(turn, check, checkmate, stalemate, fifty_moves, repetition, insufficient_material, game_over) {
@@ -579,6 +592,7 @@ $(document).ready(function () {
                 }
             }
         });
+        loadAIRecord()
     });
 
     function updateDrawButtons(state) {
@@ -609,6 +623,7 @@ $(document).ready(function () {
                 updateErrorMessage("Unable to offer draw.");
             }
         });  
+        loadAIRecord()
     });
 
     // 🔑 CLAIM 50-MOVE DRAW - Show New Game, hide Resign/Draw on claim
@@ -623,6 +638,7 @@ $(document).ready(function () {
                 updateErrorMessage(response.message);
             }
         });
+        loadAIRecord()
     });
 
     // 🔑 CLAIM REPETITION DRAW - Show New Game, hide Resign/Draw on claim
@@ -637,6 +653,7 @@ $(document).ready(function () {
                 updateErrorMessage(response.message);
             }
         });
+        loadAIRecord()
     });
 
     function endGameUI(message) {

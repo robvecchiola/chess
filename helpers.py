@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 import uuid
 from flask import session
+from sqlalchemy import case, case, func
 from extensions import db
 import chess
 
@@ -414,3 +415,31 @@ def get_or_create_player_uuid():
 def touch_game(game):
     game.last_activity_at = datetime.now(timezone.utc)
     db.session.commit()
+
+# get the ai record against human players
+def get_ai_record():
+    rows = (
+        db.session.query(
+            func.sum(case((Game.result == "0-1", 1), else_=0)).label("wins"),
+            func.sum(case((Game.result == "1-0", 1), else_=0)).label("losses"),
+            func.sum(case((Game.result == "1/2-1/2", 1), else_=0)).label("draws"),
+        )
+        .filter(Game.ai_enabled.is_(True))
+        .filter(Game.ended_at.isnot(None))
+        .one()
+    )
+
+    wins = rows.wins or 0
+    losses = rows.losses or 0
+    draws = rows.draws or 0
+
+    total = wins + losses + draws
+    win_rate = round((wins / total) * 100, 1) if total else 0.0
+
+    return {
+        "wins": wins,
+        "losses": losses,
+        "draws": draws,
+        "win_rate": win_rate,
+        "total": total
+    }
