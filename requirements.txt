@@ -23,7 +23,7 @@ msgspec==0.20.0
 packaging==25.0
 playwright==1.57.0
 pluggy==1.6.0
-pycparser==2.23
+pycparser==3.0
 pyee==13.0.0
 Pygments==2.19.2
 PyMySQL==1.1.2
