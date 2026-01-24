@@ -46,6 +46,7 @@ def cleanup_games():
         .filter(GameMove.id.is_(None))
         .filter(Game.ended_at.is_(None))
         .filter(Game.started_at < empty_cutoff)
+        .filter(Game.state == "active")
         .all()
     )
 
@@ -54,15 +55,15 @@ def cleanup_games():
         db.session.query(Game)
         .join(GameMove)
         .filter(Game.ended_at.is_(None))
-        .group_by(Game.id)
-        .having(func.max(GameMove.created_at) < zombie_cutoff)
+        .filter(Game.last_activity_at < zombie_cutoff)
+        .filter(Game.state == "active")
         .all()
     )
 
     # 3️⃣ Explicitly abandoned games (already finalized)
     explicitly_abandoned_games = (
         db.session.query(Game)
-        .filter_by(termination_reason="abandoned")
+        .filter(Game.state == "abandoned")
         .filter(Game.started_at < abandoned_cutoff)
         .all()
     )
