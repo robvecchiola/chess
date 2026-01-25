@@ -186,7 +186,7 @@ def test_threefold_repetition_draw(client):
     ]
     for from_sq, to_sq in moves:
         rv = make_move(client, from_sq, to_sq)
-    assert rv["repetition"] == True
+    assert rv["can_claim_repetition"] == True
 
 @pytest.mark.skip(reason="Test requires 100 half-moves without repetition or no legal moves - difficult to achieve")
 def test_fifty_move_draw(client):

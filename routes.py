@@ -97,7 +97,8 @@ def register_routes(app):
                 "checkmate": board.is_checkmate(),
                 "stalemate": board.is_stalemate(),
                 "fifty_moves": board.is_fifty_moves(),
-                "repetition": board.is_repetition(),
+                "can_claim_repetition": board.can_claim_threefold_repetition(),
+                "fivefold_repetition": board.is_fivefold_repetition(),
                 "insufficient_material": board.is_insufficient_material(),
                 "game_over": True,
                 "move_history": move_history,
@@ -170,10 +171,13 @@ def register_routes(app):
             game = db.session.get(Game, game_id) if game_id else None
 
             if game:
+                # Determine the color that just moved
+                # After board.push(), it's the opponent's turn, so we need the opposite of current turn
+                move_color = "white" if board.turn == chess.BLACK else "black"
                 db.session.add(GameMove(
                     game_id=game_id,
                     move_number=len(move_history),
-                    color="white",
+                    color=move_color,
                     san=move_history[-1],
                     uci=move.uci(),
                     fen_after=board.fen()
@@ -204,7 +208,8 @@ def register_routes(app):
                 "checkmate": board.is_checkmate(),
                 "stalemate": board.is_stalemate(),
                 "fifty_moves": board.is_fifty_moves(),
-                "repetition": board.is_repetition(),
+                "can_claim_repetition": board.can_claim_threefold_repetition(),
+                "fivefold_repetition": board.is_fivefold_repetition(),
                 "insufficient_material": board.is_insufficient_material(),
                 "game_over": board.is_checkmate() or board.is_stalemate() or board.is_insufficient_material() or board.is_fifty_moves() or board.is_seventyfive_moves() or board.is_fivefold_repetition(), 
                 "move_history": move_history,
@@ -229,7 +234,8 @@ def register_routes(app):
                 "checkmate": board.is_checkmate(),
                 "stalemate": board.is_stalemate(),
                 "fifty_moves": board.is_fifty_moves(),
-                "repetition": board.is_repetition(),
+                "can_claim_repetition": board.can_claim_threefold_repetition(),
+                "fivefold_repetition": board.is_fivefold_repetition(),
                 "insufficient_material": board.is_insufficient_material(),
                 "game_over": board.is_checkmate() or board.is_stalemate() or board.is_insufficient_material() or board.is_fifty_moves() or board.is_seventyfive_moves() or board.is_fivefold_repetition(),
                 "move_history": move_history,
@@ -301,7 +307,8 @@ def register_routes(app):
             "checkmate": board.is_checkmate(),
             "stalemate": board.is_stalemate(),
             "fifty_moves": board.is_fifty_moves(),
-            "repetition": board.is_repetition(),
+            "can_claim_repetition": board.can_claim_threefold_repetition(),
+            "fivefold_repetition": board.is_fivefold_repetition(),
             "insufficient_material": board.is_insufficient_material(),
             "game_over": board.is_checkmate() or board.is_stalemate() or board.is_insufficient_material() or board.is_fifty_moves() or board.is_seventyfive_moves() or board.is_fivefold_repetition(),
             "move_history": move_history,

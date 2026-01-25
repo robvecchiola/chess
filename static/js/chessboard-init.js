@@ -127,7 +127,7 @@ $(document).ready(function () {
                     board.position(response.fen);
                     currentTurn = response.turn;
                     isGameOver = response.game_over;
-                    updateStatus(response.turn, response.check, response.checkmate, response.stalemate, response.fifty_moves, response.repetition, response.insufficient_material, response.game_over);
+                    updateStatus(response.turn, response.check, response.checkmate, response.stalemate, response.fifty_moves, response.can_claim_repetition, response.insufficient_material, response.game_over);
                     updateSpecialMove(response.special_moves);
                     updateMoveHistory(response.move_history);
                     updateCaptured(response.captured_pieces);
@@ -320,12 +320,16 @@ $(document).ready(function () {
         loadAIRecord()
     });
 
-    function updateStatus(turn, check, checkmate, stalemate, fifty_moves, repetition, insufficient_material, game_over) {
+    function updateStatus(turn, check, checkmate, stalemate, fifty_moves, can_claim_repetition, insufficient_material, game_over) {
         let status;
         if (checkmate) {
             status = turn === 'white' ? "Black wins — Checkmate!" : "White wins — Checkmate!";
-        } else if (stalemate || fifty_moves || repetition || insufficient_material) {
+        } else if (stalemate || insufficient_material || game_over) {
             status = "Draw";
+        } else if (fifty_moves) {
+            status = "50-move rule available";
+        } else if (can_claim_repetition) {
+            status = "Threefold repetition available";
         } else {
             if (turn === 'white') {
                 status = "White's turn";
@@ -600,7 +604,7 @@ $(document).ready(function () {
             state.fifty_moves ? "inline-block" : "none";
 
         document.getElementById("claim-repetition-btn").style.display =
-            state.repetition ? "inline-block" : "none";
+            state.can_claim_repetition ? "inline-block" : "none";
     }
 
     // 🔑 OFFER DRAW BUTTON - Show New Game, hide Resign/Draw on click

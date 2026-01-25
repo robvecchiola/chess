@@ -192,3 +192,315 @@ def test_castling_logged_correctly(client):
         move = GameMove.query.filter_by(game_id=game_id, color="white").order_by(GameMove.move_number.desc()).first()
         assert move.san == "O-O"
     assert move.uci == "e1g1"
+
+
+# =============================================================================
+# ADDITIONAL DATABASE TESTS - NEW
+# =============================================================================
+
+def test_game_move_fen_after_accuracy(client):
+    """GameMove.fen_after stores the correct board state"""
+    app.config['AI_ENABLED'] = False
+    reset_board(client)
+    
+    # Make move and capture its FEN
+    rv = make_move(client, "e2", "e4")
+    fen_after_first = rv["fen"]
+    
+    # Get the move from database
+    with client.session_transaction() as sess:
+        game_id = sess.get("game_id")
+        move = GameMove.query.filter_by(game_id=game_id, move_number=1).first()
+        
+        assert move.fen_after == fen_after_first
+
+
+def test_game_last_activity_updates_on_move(client):
+    """Game.last_activity_at is updated on each move"""
+    app.config['AI_ENABLED'] = False
+    reset_board(client)
+    
+    with client.session_transaction() as sess:
+        game_id = sess.get("game_id")
+        game = db.session.get(Game, game_id)
+        initial_activity = game.last_activity_at
+    
+    import time
+    time.sleep(0.1)  # Ensure time difference
+    
+    # Make a move
+    make_move(client, "e2", "e4")
+    
+    with client.session_transaction() as sess:
+        game_id = sess.get("game_id")
+        game = db.session.get(Game, game_id)
+        updated_activity = game.last_activity_at
+    
+    assert updated_activity > initial_activity
+
+
+def test_resignation_logged_with_marker(client):
+    """Resignation creates GameMove with [Resignation] marker"""
+    reset_board(client)
+    
+    client.post("/resign", 
+                data='{"color": "white"}', 
+                content_type="application/json")
+    
+    with client.session_transaction() as sess:
+        game_id = sess.get("game_id")
+        # Find the resignation move
+        move = GameMove.query.filter_by(game_id=game_id).order_by(GameMove.move_number.desc()).first()
+        
+        assert "[Resignation]" in move.san
+
+
+def test_draw_claim_logged_with_marker(client):
+    """50-move draw claim creates GameMove with marker"""
+    app.config['AI_ENABLED'] = False
+    reset_board(client)
+    
+    # Set position where 50-move rule applies (halfmove_clock = 100 means 50 moves without pawn/capture)
+    with client.session_transaction() as sess:
+        sess['fen'] = '8/8/8/4k3/8/8/4K2N/8 w - - 100 50'
+        sess['move_history'] = []
+        sess['captured_pieces'] = {'white': [], 'black': []}
+        sess['special_moves'] = []
+    
+    client.post("/claim-draw/50-move")
+    
+    with client.session_transaction() as sess:
+        game_id = sess.get("game_id")
+        move = GameMove.query.filter_by(game_id=game_id).order_by(GameMove.move_number.desc()).first()
+        
+        assert "[Draw claimed: 50-move rule]" in move.san
+
+
+def test_game_state_transitions_from_active_to_finished(client):
+    """Game.state transitions from active to finished correctly"""
+    reset_board(client)
+    
+    with client.session_transaction() as sess:
+        game_id = sess.get("game_id")
+        game = db.session.get(Game, game_id)
+        
+        assert game.state == "active"
+    
+    # End game via resignation
+    client.post("/resign", 
+                data='{"color": "white"}', 
+                content_type="application/json")
+    
+    with client.session_transaction() as sess:
+        game_id = sess.get("game_id")
+        game = db.session.get(Game, game_id)
+        
+        assert game.state == "finished"
+
+
+def test_cascade_delete_game_moves(client):
+    """Deleting a game cascades to delete GameMoves"""
+    app.config['AI_ENABLED'] = False
+    reset_board(client)
+    
+    with client.session_transaction() as sess:
+        game_id = sess.get("game_id")
+    
+    # Make several moves
+    for _ in range(3):
+        make_move(client, "e2", "e4")
+        make_move(client, "e7", "e5")
+    
+    # Verify moves exist
+    with app.app_context():
+        moves_before = GameMove.query.filter_by(game_id=game_id).count()
+        assert moves_before > 0
+        
+        # Delete the game
+        game = db.session.get(Game, game_id)
+        db.session.delete(game)
+        db.session.commit()
+        
+        # Verify cascaded delete of moves
+        moves_after = GameMove.query.filter_by(game_id=game_id).count()
+        assert moves_after == 0
+
+
+def test_game_uuid_uniqueness(client):
+    """Each player gets a unique UUID"""
+    reset_board(client)
+    
+    with client.session_transaction() as sess:
+        uuid1 = sess.get("player_uuid")
+    
+    # New client session
+    with app.test_client() as client2:
+        from helpers import init_game
+        with client2.session_transaction() as sess:
+            from helpers import init_game
+            init_game()
+            uuid2 = sess.get("player_uuid")
+    
+    # UUIDs should be different
+    assert uuid1 != uuid2
+
+
+def test_ai_enabled_flag_persists(client):
+    """ai_enabled flag is set and persists in database"""
+    reset_board(client)
+    
+    with client.session_transaction() as sess:
+        game_id = sess.get("game_id")
+        game = db.session.get(Game, game_id)
+        
+        # Default is true
+        assert game.ai_enabled == True
+
+
+def test_game_timestamps_set_on_creation(client):
+    """started_at is set when game is created"""
+    reset_board(client)
+    
+    with client.session_transaction() as sess:
+        game_id = sess.get("game_id")
+        game = db.session.get(Game, game_id)
+        
+        assert game.started_at is not None
+        assert game.ended_at is None
+
+
+def test_game_result_null_until_game_over(client):
+    """result field is null while game is active"""
+    reset_board(client)
+    
+    with client.session_transaction() as sess:
+        game_id = sess.get("game_id")
+        game = db.session.get(Game, game_id)
+        
+        assert game.result is None
+
+
+def test_game_result_set_on_completion(client):
+    """result field is set when game completes"""
+    reset_board(client)
+    
+    # End game
+    client.post("/resign", 
+                data='{"color": "white"}', 
+                content_type="application/json")
+    
+    with client.session_transaction() as sess:
+        game_id = sess.get("game_id")
+        game = db.session.get(Game, game_id)
+        
+        assert game.result is not None
+        assert game.result in ["1-0", "0-1", "1/2-1/2"]
+
+
+def test_move_number_increments(client):
+    """GameMove.move_number increments correctly"""
+    app.config['AI_ENABLED'] = False
+    reset_board(client)
+    
+    make_move(client, "e2", "e4")
+    make_move(client, "e7", "e5")
+    make_move(client, "g1", "f3")
+    
+    with client.session_transaction() as sess:
+        game_id = sess.get("game_id")
+        moves = GameMove.query.filter_by(game_id=game_id).order_by(GameMove.move_number).all()
+        
+        assert len(moves) == 3
+        assert moves[0].move_number == 1
+        assert moves[1].move_number == 2
+        assert moves[2].move_number == 3
+
+
+def test_game_move_color_alternates(client):
+    """GameMove.color alternates between white and black"""
+    app.config['AI_ENABLED'] = False
+    reset_board(client)
+    
+    make_move(client, "e2", "e4")
+    make_move(client, "e7", "e5")
+    make_move(client, "g1", "f3")
+    
+    with client.session_transaction() as sess:
+        game_id = sess.get("game_id")
+        moves = GameMove.query.filter_by(game_id=game_id).order_by(GameMove.move_number).all()
+        
+        assert moves[0].color == "white"
+        assert moves[1].color == "black"
+        assert moves[2].color == "white"
+
+
+def test_capture_move_has_capture_flag(client):
+    """Capture moves are correctly identified"""
+    app.config['AI_ENABLED'] = False
+    reset_board(client)
+    
+    # Non-capture move
+    make_move(client, "e2", "e4")
+    make_move(client, "d7", "d5")
+    
+    # Capture move
+    rv = make_move(client, "e4", "d5")
+    
+    with client.session_transaction() as sess:
+        game_id = sess.get("game_id")
+        capture_move = GameMove.query.filter_by(game_id=game_id, move_number=3).first()
+        
+        # Capture should have 'x' in SAN notation
+        assert "x" in capture_move.san
+
+
+def test_game_with_ai_enabled_logged_correctly(client):
+    """ai_enabled flag is true for AI games"""
+    app.config['AI_ENABLED'] = True
+    reset_board(client)
+    
+    with client.session_transaction() as sess:
+        game_id = sess.get("game_id")
+        game = db.session.get(Game, game_id)
+        
+        assert game.ai_enabled == True
+
+
+def test_all_result_types_stored(client):
+    """All result types (1-0, 0-1, 1/2-1/2) are stored correctly"""
+    # Test 1-0 (white wins)
+    reset_board(client)
+    client.post("/resign", 
+                data='{"color": "black"}', 
+                content_type="application/json")
+    
+    with client.session_transaction() as sess:
+        game_id = sess.get("game_id")
+        game = db.session.get(Game, game_id)
+        assert game.result == "1-0"
+    
+    # Test 0-1 (black wins)
+    reset_board(client)
+    client.post("/resign", 
+                data='{"color": "white"}', 
+                content_type="application/json")
+    
+    with client.session_transaction() as sess:
+        game_id = sess.get("game_id")
+        game = db.session.get(Game, game_id)
+        assert game.result == "0-1"
+    
+    # Test 1/2-1/2 (draw)
+    reset_board(client)
+    with client.session_transaction() as sess:
+        sess['fen'] = '8/8/8/4k3/8/8/4K2N/8 w - - 100 50'
+        sess['move_history'] = []
+        sess['captured_pieces'] = {'white': [], 'black': []}
+        sess['special_moves'] = []
+    
+    client.post("/claim-draw/50-move")
+    
+    with client.session_transaction() as sess:
+        game_id = sess.get("game_id")
+        game = db.session.get(Game, game_id)
+        assert game.result == "1/2-1/2"
