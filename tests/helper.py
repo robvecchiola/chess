@@ -1,5 +1,7 @@
 from flask import json
 from playwright.sync_api import Page
+from pathlib import Path
+import os
 
 def setup_board_position(page: Page, fen: str, move_history=None, 
                         captured_pieces=None, special_moves=None):
@@ -9,11 +11,24 @@ def setup_board_position(page: Page, fen: str, move_history=None,
     Uses browser's fetch with credentials to ensure Flask-Session cookie
     is sent and maintained across the /test/set_position call.
     
-    Note: With function-scoped browser context (from conftest.py),
-    each test gets a fresh browser context, so no stale session cookies.
+    🔑 CRITICAL FOR TEST ISOLATION:
+    - Clears browser cookies
+    - Clears Flask-Session files on disk
+    - Ensures completely fresh session state
     """
-    # Clear any cookies from previous tests to ensure fresh session
+    # 🔑 STEP 1: Clear browser cookies to remove session ID from client
     page.context.clear_cookies()
+    
+    # 🔑 STEP 2: Force-delete Flask-Session files to ensure fresh session
+    # This prevents stale session data from previous tests
+    session_dir = Path("flask_session")
+    if session_dir.exists():
+        for session_file in session_dir.glob("*"):
+            if session_file.is_file():
+                try:
+                    session_file.unlink()
+                except Exception:
+                    pass  # Ignore errors, continue
     
     payload = {
         "fen": fen,
@@ -47,7 +62,8 @@ def setup_board_position(page: Page, fen: str, move_history=None,
     assert result.get('status') == 'ok', f"Failed to set position: {result}"
     
     # Extra delay to ensure session is written to disk AND browser receives Set-Cookie
-    page.wait_for_timeout(3000)
+    # This is critical in full suite runs where server might be under load
+    page.wait_for_timeout(5000)  # Increased from 3000 for robustness
     
     # Navigate to the page (instead of reload) to force a fresh GET with the session cookie
     # This ensures Flask loads the updated session from disk
@@ -56,7 +72,7 @@ def setup_board_position(page: Page, fen: str, move_history=None,
     page.wait_for_load_state('networkidle')
     
     # Wait for board to stabilize after navigation
-    page.wait_for_timeout(1000)
+    page.wait_for_timeout(2000)  # Increased from 1000 for full suite runs
 
 def get_piece_in_square(page: Page, square: str):
     """

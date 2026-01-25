@@ -345,11 +345,20 @@ $(document).ready(function () {
         const whiteList = $("#special-white");
         const blackList = $("#special-black");
 
+        // Skip processing if not array
+        if (!Array.isArray(special_moves)) return;
+
+        // Always clear and repopulate to avoid duplicates
+        // (Backend returns complete accumulated list, not just new items)
         whiteList.empty();
         blackList.empty();
 
-        if (!Array.isArray(special_moves)) return;
+        // If array is empty, lists are already cleared - done
+        if (special_moves.length === 0) {
+            return;
+        }
 
+        // Populate lists with all special moves
         special_moves.forEach(move => {
             let color = null;
             let text = move;

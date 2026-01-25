@@ -5,6 +5,9 @@ This file is automatically discovered by pytest and provides shared fixtures
 import pytest
 import threading
 import time
+import os
+import shutil
+from pathlib import Path
 from config import TestingConfig
 from flask_migrate import upgrade
 from app import create_app
@@ -50,6 +53,62 @@ def flask_server():
     yield base_url
     
     # Server thread will be killed when test session ends (daemon=True)
+
+
+# 🔑 CRITICAL: Test Isolation Fixture - Prevents Flask-Session Pollution
+# Each test gets a fresh session by clearing the filesystem session cache
+@pytest.fixture(autouse=True)
+def cleanup_flask_session():
+    """
+    Ensure Flask-Session files don't pollute between tests.
+    
+    Problem: Flask-Session stores data in files in flask_session/ directory.
+    When tests run in sequence, old session files can interfere with new tests,
+    causing flaky failures where tests pass individually but fail in suite.
+    
+    Solution: Clean up session directory before each test.
+    Also cleans up database Game records to prevent spillover.
+    """
+    # Cleanup BEFORE the test runs
+    # (Using a fixture without explicit setup/teardown means it runs before and after)
+    
+    session_dir = Path("flask_session")
+    
+    # Remove all session files to ensure fresh state
+    if session_dir.exists():
+        for session_file in session_dir.glob("*"):
+            if session_file.is_file():
+                try:
+                    session_file.unlink()
+                    print(f"[CLEANUP] Removed session file: {session_file.name}")
+                except Exception as e:
+                    print(f"[CLEANUP] Failed to remove {session_file.name}: {e}")
+    
+    # Also clear database Game records to ensure clean state
+    # This prevents AI records from previous tests affecting later tests
+    try:
+        from app import create_app
+        from config import TestingConfigFilesystem
+        from extensions import db
+        from models import Game, GameMove
+        
+        app = create_app(TestingConfigFilesystem)
+        
+        with app.app_context():
+            # Delete all game records to start fresh
+            GameMove.query.delete()
+            Game.query.delete()
+            db.session.commit()
+            print(f"[CLEANUP] Cleared database Game records")
+    except Exception as e:
+        print(f"[CLEANUP] Warning: Failed to clear database: {e}")
+    
+    # Yield control to test - test runs here
+    yield
+    
+    # Cleanup AFTER the test runs (optional - prevents DB bloat)
+    # The before-cleanup is what prevents pollution, but we can also cleanup after
+    # to prevent accumulation of test data
 
 
 # Note: client fixtures are defined in individual test files
