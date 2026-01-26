@@ -86,6 +86,9 @@ def execute_move(board, move, move_history, captured_pieces, special_moves, is_a
     """
     Execute a move on the board, updating history, captures, and special moves.
     For AI moves, apply promotion safety net if needed.
+    
+    🔑 CRITICAL: Special moves are prefixed with "White:" or "Black:" to allow
+    frontend to correctly separate them in UI (#special-white vs #special-black)
     """
 
     logger.debug(
@@ -93,6 +96,9 @@ def execute_move(board, move, move_history, captured_pieces, special_moves, is_a
         move.uci(),
         is_ai
     )
+
+    # 🔑 Determine who is making the move BEFORE board state changes
+    moving_color = "White" if board.turn == chess.WHITE else "Black"
 
     # Detect special move
     special_move = None
@@ -104,7 +110,7 @@ def execute_move(board, move, move_history, captured_pieces, special_moves, is_a
         special_move = f"Promotion to {chess.piece_symbol(move.promotion).upper()}"
     
     if special_move:
-        logger.info("Special move executed | type=%s", special_move)
+        logger.info("Special move executed | type=%s | color=%s", special_move, moving_color)
     
     # SAN before push
     move_san = board.san(move)
@@ -138,7 +144,10 @@ def execute_move(board, move, move_history, captured_pieces, special_moves, is_a
     board.push(move)
     move_history.append(move_san)
     if special_move:
-        special_moves.append(special_move)
+        # 🔑 Prefix with color so frontend can separate white/black moves
+        prefixed_special_move = f"{moving_color}: {special_move}"
+        special_moves.append(prefixed_special_move)
+        logger.debug("Special move appended | prefixed=%s", prefixed_special_move)
 
 
 ## illegal moves helper

@@ -324,7 +324,7 @@ def test_castling_special_moves_tracking(client):
     # Castle
     rv = make_move(client, "e1", "g1")
     assert rv["status"] == "ok"
-    assert "Castling" in rv["special_moves"], "Castling should be in special_moves"
+    assert any("Castling" in m for m in rv["special_moves"]), "Castling should be in special_moves"
 
 def test_castling_with_pieces_between_king_and_rook(client):
     """Test castling fails if pieces block the path"""

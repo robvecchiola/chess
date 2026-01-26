@@ -317,7 +317,7 @@ def test_special_moves_castling(client):
     make_move(client, "f8", "e7")
     rv = make_move(client, "e1", "g1")
     assert "special_moves" in rv
-    assert "Castling" in rv["special_moves"]
+    assert any("Castling" in m for m in rv["special_moves"]), f"Expected Castling in {rv['special_moves']}"
 
 def test_special_moves_en_passant(client):
     app.config['AI_ENABLED'] = False
@@ -329,7 +329,7 @@ def test_special_moves_en_passant(client):
     make_move(client, "f7", "f5")
     rv = make_move(client, "e5", "f6")
     assert "special_moves" in rv
-    assert "En Passant" in rv["special_moves"]
+    assert any("En Passant" in m for m in rv["special_moves"]), f"Expected En Passant in {rv['special_moves']}"
 
 def test_special_moves_promotion(client):
     app.config['AI_ENABLED'] = False
@@ -344,7 +344,7 @@ def test_special_moves_promotion(client):
         make_move(client, from_sq, to_sq)
     rv = make_move(client, "b7", "a8", promotion="q")
     assert "special_moves" in rv
-    assert "Promotion to Q" in rv["special_moves"]
+    assert any("Promotion to Q" in m for m in rv["special_moves"]), f"Expected Promotion to Q in {rv['special_moves']}"
 
 def test_multiple_special_moves_accumulation(client):
     app.config['AI_ENABLED'] = False
@@ -356,7 +356,7 @@ def test_multiple_special_moves_accumulation(client):
     make_move(client, "f7", "f5")
     rv = make_move(client, "e5", "f6")  # En passant
     assert len(rv["special_moves"]) == 1
-    assert "En Passant" in rv["special_moves"]
+    assert any("En Passant" in m for m in rv["special_moves"]), f"Expected En Passant in {rv['special_moves']}"
     
     # Second special move: castling
     make_move(client, "g8", "h6")
@@ -366,8 +366,8 @@ def test_multiple_special_moves_accumulation(client):
     make_move(client, "g8", "h6")
     rv = make_move(client, "e1", "g1")  # Castling
     assert len(rv["special_moves"]) == 2
-    assert "En Passant" in rv["special_moves"]
-    assert "Castling" in rv["special_moves"]
+    assert any("En Passant" in m for m in rv["special_moves"]), f"Expected En Passant in {rv['special_moves']}"
+    assert any("Castling" in m for m in rv["special_moves"]), f"Expected Castling in {rv['special_moves']}"
 
 def test_san_notation_includes_capture(client):
     app.config['AI_ENABLED'] = False

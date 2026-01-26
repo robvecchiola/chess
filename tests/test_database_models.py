@@ -226,7 +226,7 @@ def test_game_last_activity_updates_on_move(client):
         initial_activity = game.last_activity_at
     
     import time
-    time.sleep(0.1)  # Ensure time difference
+    time.sleep(1.0)  # Ensure time difference (increased to 1 second)
     
     # Make a move
     make_move(client, "e2", "e4")

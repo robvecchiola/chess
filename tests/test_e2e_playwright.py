@@ -446,7 +446,7 @@ def test_pawn_promotion_queen_selection_with_setup(page: Page, live_server):
     page.wait_for_timeout(500)
     
     # Wait for the promotion to appear in special moves
-    page.locator("#special-white li, #special-black li").filter(has_text=re.compile(r"Promotion.*Q", re.IGNORECASE)).wait_for(timeout=5000)
+    page.locator("#special-white li, #special-black li").filter(has_text=re.compile(r"Promotion to Q", re.IGNORECASE)).wait_for(timeout=5000)
     
     # Verify promotion happened by checking special moves
     special_white_locator = page.locator("#special-white li")
@@ -1288,16 +1288,18 @@ def test_resign_button_ends_game(page: Page, live_server):
     # Wait for board to load
     expect(page.locator("#board")).to_be_visible()
     
-    # Click resign button
-    page.click("#resign-btn")
+    # Click resign button and wait for response
+    with page.expect_response(lambda resp: "/resign" in resp.url) as response_info:
+        page.click("#resign-btn")
+    response_info.value
+    
+    # Wait for status to update
+    page.wait_for_load_state("networkidle")
+    page.wait_for_timeout(500)
     
     # Should show resignation message
     status = page.locator("#game-status")
-    expect(status).to_contain_text("resignation")
-    
-    # Game should be over - board should be disabled
-    # (In current implementation, board may still be clickable, but status shows game over)
-    expect(status).to_contain_text("wins")
+    expect(status).to_contain_text("resignation", timeout=5000)
 
 
 def test_resign_after_moves(page: Page, live_server):

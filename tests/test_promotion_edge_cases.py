@@ -30,7 +30,7 @@ def test_promotion_capture_rook(client):
     assert rv["status"] == "ok"
     board = chess.Board(rv["fen"])
     assert board.piece_at(chess.A8).symbol().upper() == "Q"
-    assert "Promotion to Q" in rv["special_moves"]
+    assert any("Promotion to Q" in m for m in rv["special_moves"])
 
 
 def test_promotion_diagonal_capture(client):
@@ -70,7 +70,8 @@ def test_promotion_both_sides_same_game(client):
     # Black promotes (diagonal capture)
     rv = make_move(client, "g2", "h1", promotion="q")
     assert rv["status"] == "ok"
-    assert rv["special_moves"].count("Promotion to Q") == 2
+    promotion_count = sum(1 for m in rv["special_moves"] if "Promotion to Q" in m)
+    assert promotion_count == 2
 
 
 def test_promotion_multiple_queens(client):
@@ -449,8 +450,8 @@ def test_both_sides_promote_same_move_sequence(client):
     assert rv2["status"] == "ok"
     
     # Both should have promotion in special moves
-    assert "Promotion to Q" in rv1["special_moves"]
-    assert "Promotion to Q" in rv2["special_moves"]
+    assert any("Promotion to Q" in m for m in rv1["special_moves"])
+    assert any("Promotion to Q" in m for m in rv2["special_moves"])
 
 
 def test_promotion_after_en_passant(client):
@@ -459,7 +460,7 @@ def test_promotion_after_en_passant(client):
     
     # En passant first
     rv1 = make_move(client, "d5", "e6")
-    assert "En Passant" in rv1["special_moves"]
+    assert any("En Passant" in m for m in rv1["special_moves"])
     
     # Now setup promotion (need multiple moves)
     # Skip this complex setup, just verify en passant didn't break state
