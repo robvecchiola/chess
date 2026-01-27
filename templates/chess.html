@@ -153,6 +153,12 @@
             capturedPieces: {{ initial_captured_pieces | tojson }},
             specialMoves: {{ initial_special_moves | tojson }},
             turn: {{ initial_turn | tojson }},
+            check: {{ initial_check | default(False) | tojson }},
+            checkmate: {{ initial_checkmate | default(False) | tojson }},
+            stalemate: {{ initial_stalemate | default(False) | tojson }},
+            fifty_moves: {{ initial_fifty_moves | default(False) | tojson }},
+            can_claim_repetition: {{ initial_can_claim_repetition | default(False) | tojson }},
+            insufficient_material: {{ initial_insufficient_material | default(False) | tojson }},
             aiEnabled: {{ ai_enabled | tojson }},
             gameOver: {{ initial_game_over | tojson }}
         };

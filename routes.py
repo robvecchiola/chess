@@ -71,6 +71,12 @@ def register_routes(app):
                              initial_captured_pieces=captured_pieces,
                              initial_special_moves=special_moves,
                              initial_turn="white" if board.turn == chess.WHITE else "black",
+                             initial_check=board.is_check(),
+                             initial_checkmate=board.is_checkmate(),
+                             initial_stalemate=board.is_stalemate(),
+                             initial_fifty_moves=board.is_fifty_moves(),
+                             initial_can_claim_repetition=board.can_claim_threefold_repetition(),
+                             initial_insufficient_material=board.is_insufficient_material(),
                              ai_enabled=app.config.get('AI_ENABLED', False),
                              initial_game_over=game_over)
 

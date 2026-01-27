@@ -561,13 +561,14 @@ def test_check_status_displays_with_setup(page: Page, live_server):
     page.goto(live_server)
     
     # Set up position where white king is in check
-    # Black queen on e5, white king on e1
-    check_fen = "rnb1kbnr/pppp1ppp/8/4q3/8/8/PPPP1PPP/RNBQKBNR w KQkq - 0 1"
+    # Black queen on e4 gives check to white king on e1 (no pawns blocking)
+    # FEN: r3k2r/8/8/8/4q3/8/8/R3K2R w - - 0 1
+    check_fen = "r3k2r/8/8/8/4q3/8/8/R3K2R w - - 0 1"
     
     setup_board_position(
         page, 
         check_fen,
-        move_history=["e4", "e5", "Qe5"],
+        move_history=[],  # No move history - just use FEN directly
         special_moves=[]
     )
     

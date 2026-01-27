@@ -13,6 +13,7 @@ $(document).ready(function () {
     // Use initial position from backend, fallback to 'start'
     let initialPosition = config.fen || 'start';
 
+    //get the ai's record
     function loadAIRecord() {
         $.get("/stats/ai-record", function (data) {
             $("#ai-wins").text(data.wins);
@@ -22,6 +23,7 @@ $(document).ready(function () {
         });
     }
 
+    //load the record
     loadAIRecord();
 
     board = Chessboard('board', {
@@ -65,11 +67,7 @@ $(document).ready(function () {
     window.board = board;
 
     // Initialize UI with backend values
-    updateSpecialMove(config.specialMoves || []);
-    updateMoveHistory(config.moveHistory || []);
-    updateCaptured(config.capturedPieces || { white: [], black: [] });
-    updateMaterialAdvantage(Number(config.material) || 0);
-    updatePositionEvaluation(Number(config.evaluation) || 0);
+    updateFromState(config);
 
     // 🔑 INITIALIZE BUTTON VISIBILITY - Hide New Game, show Resign/Draw on page load
     // Only hide reset if game is active (not game over)
@@ -83,22 +81,8 @@ $(document).ready(function () {
         $.post("/ai-move", function(aiResponse) {
             aiThinking = false;
             board.draggable = true;
-            board.position(aiResponse.fen);
-            currentTurn = aiResponse.turn;
-            updateCaptured(aiResponse.captured_pieces);
-            updateMaterialAdvantage(aiResponse.material);
-            updatePositionEvaluation(aiResponse.evaluation);
-            updateMoveHistory(aiResponse.move_history);
-            updateStatus(
-                aiResponse.turn,
-                aiResponse.check,
-                aiResponse.checkmate,
-                aiResponse.stalemate,
-                false,
-                false,
-                false,
-                aiResponse.game_over
-            );
+
+            updateFromState(aiResponse);
         });
     }
 
@@ -107,7 +91,8 @@ $(document).ready(function () {
 
         board.draggable = false;
 
-        updateStatus('black', false, false, false, false, false, false, false);
+        //updateStatus('black', false, false, false, false, false, false, false);
+        $("#game-status").text("Processing move…");
 
         const payload = { from: source, to: target };
         if (promotionPiece) payload.promotion = promotionPiece;
@@ -124,41 +109,21 @@ $(document).ready(function () {
 
                     pendingPromotion = null;
 
-                    board.position(response.fen);
-                    currentTurn = response.turn;
-                    isGameOver = response.game_over;
-                    updateStatus(response.turn, response.check, response.checkmate, response.stalemate, response.fifty_moves, response.can_claim_repetition, response.insufficient_material, response.game_over);
-                    updateSpecialMove(response.special_moves);
-                    updateMoveHistory(response.move_history);
-                    updateCaptured(response.captured_pieces);
-                    updateMaterialAdvantage(response.material);
-                    updatePositionEvaluation(response.evaluation);
+                    updateFromState(response);
                     updateErrorMessage("");
-                    updateDrawButtons(response);
+
+                    if (response.turn === "black" && !response.game_over) {
+                        aiThinking = true;
+                        board.draggable = false;
+                    }
 
                     // If it's now black's turn, trigger AI move
                     if (response.turn === "black" && !response.game_over) {
                         $.post("/ai-move", function(aiResponse) {
                             aiThinking = false;
                             board.draggable = true;
-                            board.position(aiResponse.fen);
-                            currentTurn = aiResponse.turn;
-                            updateCaptured(aiResponse.captured_pieces);
-                            updateMaterialAdvantage(aiResponse.material);
-                            updatePositionEvaluation(aiResponse.evaluation);
-                            updateMoveHistory(aiResponse.move_history);
-                            updateSpecialMove(aiResponse.special_moves);
-                            updateDrawButtons(aiResponse);
-                            updateStatus(
-                                aiResponse.turn,
-                                aiResponse.check,
-                                aiResponse.checkmate,
-                                aiResponse.stalemate,
-                                false,
-                                false,
-                                false,
-                                aiResponse.game_over
-                            );
+
+                            updateFromState(aiResponse);
                         });
                     } else {
                         aiThinking = false;
@@ -188,8 +153,8 @@ $(document).ready(function () {
             }
         });
 
-        aiThinking = true;
-        board.draggable = false;
+        //aiThinking = true;
+        //board.draggable = false;
     }
 
     window.sendMove = sendMove;
@@ -317,7 +282,6 @@ $(document).ready(function () {
                 updateButtonVisibility('game_active');
             }
         });
-        loadAIRecord()
     });
 
     function updateStatus(turn, check, checkmate, stalemate, fifty_moves, can_claim_repetition, insufficient_material, game_over) {
@@ -605,14 +569,21 @@ $(document).ready(function () {
                 }
             }
         });
-        loadAIRecord()
     });
 
     function updateDrawButtons(state) {
-        document.getElementById("claim-50-btn").style.display =
-            state.fifty_moves ? "inline-block" : "none";
+        if (!state) return;
 
-        document.getElementById("claim-repetition-btn").style.display =
+        const fiftyBtn = document.getElementById("claim-50-btn");
+        if (!fiftyBtn) return;
+
+        fiftyBtn.style.display =
+            state.fifty_moves ? "inline-block" : "none";
+        
+        const repetitionBtn = document.getElementById("claim-repetition-btn");
+        if (!repetitionBtn) return;
+
+        repetitionBtn.style.display =
             state.can_claim_repetition ? "inline-block" : "none";
     }
 
@@ -636,7 +607,6 @@ $(document).ready(function () {
                 updateErrorMessage("Unable to offer draw.");
             }
         });  
-        loadAIRecord()
     });
 
     // 🔑 CLAIM 50-MOVE DRAW - Show New Game, hide Resign/Draw on claim
@@ -651,7 +621,6 @@ $(document).ready(function () {
                 updateErrorMessage(response.message);
             }
         });
-        loadAIRecord()
     });
 
     // 🔑 CLAIM REPETITION DRAW - Show New Game, hide Resign/Draw on claim
@@ -666,14 +635,41 @@ $(document).ready(function () {
                 updateErrorMessage(response.message);
             }
         });
-        loadAIRecord()
     });
 
     function endGameUI(message) {
         isGameOver = true;
         board.draggable = false;
         $("#game-status").text(message);
-
         $("#offer-draw-btn, #claim-50-btn, #claim-repetition-btn").hide();
+        loadAIRecord()
     }
+
+    // state function
+    function updateFromState(state) {
+        if (!state) return;
+
+        board.position(state.fen);
+        currentTurn = state.turn;
+        isGameOver = state.game_over;
+
+        updateStatus(
+            state.turn,
+            state.check,
+            state.checkmate,
+            state.stalemate,
+            state.fifty_moves,
+            state.can_claim_repetition,
+            state.insufficient_material,
+            state.game_over
+        );
+
+        updateDrawButtons(state);
+        updateCaptured(state.captured_pieces);
+        updateMoveHistory(state.move_history);
+        updateSpecialMove(state.special_moves);
+        updateMaterialAdvantage(state.material);
+        updatePositionEvaluation(state.evaluation);
+    }
+
 });
