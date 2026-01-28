@@ -91,7 +91,6 @@ $(document).ready(function () {
 
         board.draggable = false;
 
-        //updateStatus('black', false, false, false, false, false, false, false);
         $("#game-status").text("Processing move…");
 
         const payload = { from: source, to: target };
@@ -153,8 +152,6 @@ $(document).ready(function () {
             }
         });
 
-        //aiThinking = true;
-        //board.draggable = false;
     }
 
     window.sendMove = sendMove;
@@ -267,18 +264,12 @@ $(document).ready(function () {
             if (response.status === "ok") {
                 pendingPromotion = null;
                 lastPosition = null;
-                currentTurn = 'white';
-                isGameOver = false;
-                board.start();
-                updateStatus('white', false, false, false, false, false, false, false);
-                updateSpecialMove(response.special_moves);
-                updateMoveHistory([]);
-                updateCaptured({ white: [], black: [] });
+                aiThinking = false;
+                board.draggable = true;
+
                 updateErrorMessage("");
-                updateMaterialAdvantage(0);
-                updatePositionEvaluation(0);
-                
-                // 🔑 After reset: hide New Game, show Resign/Draw
+                updateFromState(response);
+
                 updateButtonVisibility('game_active');
             }
         });

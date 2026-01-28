@@ -350,7 +350,7 @@ def register_routes(app):
             "checkmate": False,
             "stalemate": False,
             "fifty_moves": False,
-            "repetition": False,
+            "can_claim_repetition": False,
             "insufficient_material": False,
             "game_over": False,
             "move_history": [],

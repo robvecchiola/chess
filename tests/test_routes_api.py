@@ -105,7 +105,7 @@ def test_game_over_fields(client):
     assert 'game_over' in data
     assert data['game_over'] == False
     assert data['fifty_moves'] == False
-    assert data['repetition'] == False
+    assert data['can_claim_repetition'] == False
     assert data['insufficient_material'] == False
 
 # -------------------------------------------------------------------
