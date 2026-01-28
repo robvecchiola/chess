@@ -114,16 +114,14 @@ $(document).ready(function () {
                     if (response.turn === "black" && !response.game_over) {
                         aiThinking = true;
                         board.draggable = false;
-                    }
 
-                    // If it's now black's turn, trigger AI move
-                    if (response.turn === "black" && !response.game_over) {
-                        $.post("/ai-move", function(aiResponse) {
+                        $.post("/ai-move", function (aiResponse) {
                             aiThinking = false;
                             board.draggable = true;
 
                             updateFromState(aiResponse);
                         });
+
                     } else {
                         aiThinking = false;
                         board.draggable = true;
