@@ -9,6 +9,7 @@ $(document).ready(function () {
     let currentTurn = config.turn || 'white';
     let isGameOver = false;
     let aiThinking = false;
+    let aiInFlight = false;
 
     // Use initial position from backend, fallback to 'start'
     let initialPosition = config.fen || 'start';
@@ -75,16 +76,7 @@ $(document).ready(function () {
     updateButtonVisibility(initialGameState);
 
     // If it's AI's turn on page load, trigger AI move
-    if (currentTurn === 'black' && config.aiEnabled && !isGameOver) {
-        aiThinking = true;
-        board.draggable = false;
-        $.post("/ai-move", function(aiResponse) {
-            aiThinking = false;
-            board.draggable = true;
-
-            updateFromState(aiResponse);
-        });
-    }
+    maybeTriggerAiTurn({turn: currentTurn, game_over: isGameOver});
 
     // Send move to server
     function sendMove(source, target, promotionPiece=null) {
@@ -107,25 +99,10 @@ $(document).ready(function () {
                 if (response.status === "ok") {
 
                     pendingPromotion = null;
-
-                    updateFromState(response);
                     updateErrorMessage("");
 
-                    if (response.turn === "black" && !response.game_over) {
-                        aiThinking = true;
-                        board.draggable = false;
-
-                        $.post("/ai-move", function (aiResponse) {
-                            aiThinking = false;
-                            board.draggable = true;
-
-                            updateFromState(aiResponse);
-                        });
-
-                    } else {
-                        aiThinking = false;
-                        board.draggable = true;
-                    }
+                    updateFromState(response);          
+                    maybeTriggerAiTurn(response);
 
                 } else {
 
@@ -659,6 +636,39 @@ $(document).ready(function () {
         updateSpecialMove(state.special_moves);
         updateMaterialAdvantage(state.material);
         updatePositionEvaluation(state.evaluation);
+    }
+
+    // helper for ai turn and board state
+    function maybeTriggerAiTurn(state) {
+        if (!state || state.game_over) return;
+
+        // Not AI's turn → unlock board
+        if (state.turn !== "black") {
+            aiThinking = false;
+            board.draggable = true;
+            return;
+        }
+
+        // AI already thinking → do nothing
+        if (aiInFlight) return;
+
+        // Lock everything
+        aiInFlight = true;
+        aiThinking = true;
+        board.draggable = false;
+
+        $.post("/ai-move", function (aiResponse) {
+            aiInFlight = false;
+            aiThinking = false;
+            board.draggable = true;
+
+            updateFromState(aiResponse);
+        }).fail(function () {
+            // Always unlock on failure
+            aiInFlight = false;
+            aiThinking = false;
+            board.draggable = true;
+        });
     }
 
 });
