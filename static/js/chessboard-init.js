@@ -10,6 +10,7 @@ $(document).ready(function () {
     let isGameOver = false;
     let aiThinking = false;
     let aiInFlight = false;
+    let moveInFlight = false;
 
     // Use initial position from backend, fallback to 'start'
     let initialPosition = config.fen || 'start';
@@ -33,12 +34,17 @@ $(document).ready(function () {
         pieceTheme: '/static/images/chesspieces/wikipedia/{piece}.png',
 
         onDragStart: function (source, piece) {
-            lastPosition = board.position();
 
-            const pieceColor = piece.startsWith('w') ? 'white' : 'black';
-            if (isGameOver || aiThinking || pieceColor !== currentTurn) {
+            if (moveInFlight || aiThinking || isGameOver) {
                 return false;
             }
+
+            const pieceColor = piece.startsWith('w') ? 'white' : 'black';
+            if (pieceColor !== currentTurn) {
+                return false;
+            }
+
+            lastPosition = board.position();
         },
 
         onDrop: function (source, target, piece) {
@@ -51,6 +57,7 @@ $(document).ready(function () {
 
             if (promotionCheck.promotionNeeded) {
 
+                moveInFlight = true; 
                 pendingPromotion = { source, target, oldPos: lastPosition };
                 board.draggable = false;
 
@@ -81,6 +88,7 @@ $(document).ready(function () {
     // Send move to server
     function sendMove(source, target, promotionPiece=null) {
 
+        moveInFlight = true;
         board.draggable = false;
 
         $("#game-status").text("Processing move…");
@@ -95,6 +103,7 @@ $(document).ready(function () {
             data: JSON.stringify(payload),
 
             success: function (response) {
+                moveInFlight = false;
 
                 if (response.status === "ok") {
 
@@ -116,6 +125,7 @@ $(document).ready(function () {
             },
 
             error: function(xhr) {
+                moveInFlight = false;
                 aiThinking = false;
                 board.draggable = true;
                 rollbackPosition();
@@ -203,6 +213,7 @@ $(document).ready(function () {
 
         $("#cancel-promotion").click(function () {
             $("#promotion-dialog").remove();
+            moveInFlight = false; 
             board.draggable = true;
             rollbackPosition();
         });
