@@ -35,7 +35,7 @@ $(document).ready(function () {
 
         onDragStart: function (source, piece) {
 
-            if (moveInFlight || aiThinking || isGameOver) {
+            if (!canHumanMove()) {
                 return false;
             }
 
@@ -87,6 +87,8 @@ $(document).ready(function () {
 
     // Send move to server
     function sendMove(source, target, promotionPiece=null) {
+
+        if (!canHumanMove()) return;
 
         moveInFlight = true;
         board.draggable = false;
@@ -465,7 +467,7 @@ $(document).ready(function () {
 
     function onSquareTap(square) {
 
-        if (currentTurn !== "white" || isGameOver || aiThinking) return;
+        if (!canHumanMove()) return;
 
         const position = board.position();
         const piece = position[square];
@@ -567,7 +569,7 @@ $(document).ready(function () {
     // 🔑 OFFER DRAW BUTTON - Show New Game, hide Resign/Draw on click
     $("#offer-draw-btn").click(function () {
 
-        if (isGameOver || aiThinking) return;
+        if (!canHumanMove()) return;
 
         $.ajax({
             url: "/draw-agreement",
@@ -588,7 +590,7 @@ $(document).ready(function () {
 
     // 🔑 CLAIM 50-MOVE DRAW - Show New Game, hide Resign/Draw on claim
     $("#claim-50-btn").click(function () {
-        if (isGameOver || aiThinking) return;
+        if (!canHumanMove()) return;
 
         $.post("/claim-draw/50-move", function (response) {
             if (response.status === "ok") {
@@ -602,7 +604,7 @@ $(document).ready(function () {
 
     // 🔑 CLAIM REPETITION DRAW - Show New Game, hide Resign/Draw on claim
     $("#claim-repetition-btn").click(function () {
-        if (isGameOver || aiThinking) return;
+        if (!canHumanMove()) return;
 
         $.post("/claim-draw/repetition", function (response) {
             if (response.status === "ok") {
@@ -680,6 +682,10 @@ $(document).ready(function () {
             aiThinking = false;
             board.draggable = true;
         });
+    }
+
+    function canHumanMove() {
+        return !isGameOver && !aiThinking && !aiInFlight && !moveInFlight;
     }
 
 });
