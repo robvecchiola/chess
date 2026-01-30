@@ -2,6 +2,10 @@ import chess
 import math
 from constants import PIECE_TABLES, PIECE_VALUES
 import logging
+import random
+
+TOP_N_MOVES = 3
+
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +29,9 @@ def evaluate_board(board):
             else:
                 score -= value + table[chess.square_mirror(square)]
     
-    return score
+    noise = random.randint(-8, 8)  # centipawns
+    return score + noise
+
 
 
 def quiescence(board, alpha, beta, depth=0, max_depth=4):
@@ -106,8 +112,6 @@ def order_moves(board):
 
 
 def choose_ai_move(board, depth=2):
-    """Choose the best move using minimax with alpha-beta pruning"""
-    # Note: depth=2 with quiescence search is roughly equivalent to depth=3-4 without it
     logger.debug(
         "AI evaluating position | turn=%s | depth=%s | fen=%s",
         "white" if board.turn else "black",
@@ -115,42 +119,49 @@ def choose_ai_move(board, depth=2):
         board.fen()
     )
 
-    best_move = None
-    
-    # Determine if current player is white (maximizing) or black (minimizing)
-    if board.turn == chess.WHITE:
-        # White wants to maximize
-        best_value = -math.inf
-        for move in order_moves(board):
-            board.push(move)
-            value = minimax(board, depth - 1, -math.inf, math.inf, False)
-            board.pop()
-            
-            if value > best_value:
-                best_value = value
-                best_move = move
-    else:
-        # Black wants to minimize
-        best_value = math.inf
-        for move in order_moves(board):
-            board.push(move)
-            value = minimax(board, depth - 1, -math.inf, math.inf, True)
-            board.pop()
-            
-            if value < best_value:
-                best_value = value
-                best_move = move
-    
-    if best_move is None:
-        logger.error("AI failed to select a move | fen=%s", board.fen())
-    else:
-        logger.info(
-            "AI selected move | uci=%s | turn=%s",
-            best_move.uci(),
-            "white" if board.turn else "black",
-        )
+     # Optional opening randomness (first 1–2 moves)
+    if board.fullmove_number <= 2:
+        legal = list(board.legal_moves)
+        return random.choice(legal)
 
-    return best_move
+    scored_moves = []
+
+    maximizing_white = board.turn == chess.WHITE
+
+    for move in order_moves(board):
+        board.push(move)
+        value = minimax(
+            board,
+            depth - 1,
+            -math.inf,
+            math.inf,
+            not maximizing_white
+        )
+        board.pop()
+
+        scored_moves.append((value, move))
+
+    if not scored_moves:
+        logger.error("AI failed to select a move | fen=%s", board.fen())
+        return None
+
+    # Sort best → worst
+    scored_moves.sort(
+        key=lambda x: x[0],
+        reverse=maximizing_white
+    )
+
+    top_moves = scored_moves[:TOP_N_MOVES]
+    chosen_value, chosen_move = random.choice(top_moves)
+
+    logger.info(
+        "AI selected move | uci=%s | turn=%s | eval=%s",
+        chosen_move.uci(),
+        "white" if board.turn else "black",
+        chosen_value
+    )
+
+    return chosen_move
 
 #material thing
 def material_score(board):
