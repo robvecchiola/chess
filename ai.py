@@ -119,10 +119,29 @@ def choose_ai_move(board, depth=2):
         board.fen()
     )
 
-     # Optional opening randomness (first 1–2 moves)
+    # Opening randomness (first 1–2 moves)
+    # Intentional: random early move for variety.
+    # Mate and promotion are impossible this early.
+
+    #if board.fullmove_number <= 2:
+    #    legal = list(board.legal_moves)
+    #    if not legal:
+    #        logger.error("AI failed to select a move | fen=%s", board.fen())
+    #        return None
+    #    else:
+    #        return random.choice(legal)
+
+    # opening book on the fly
     if board.fullmove_number <= 2:
-        legal = list(board.legal_moves)
-        return random.choice(legal)
+        scored = []
+        for move in board.legal_moves:
+            board.push(move)
+            score = evaluate_board(board)
+            board.pop()
+            scored.append((score, move))
+
+        scored.sort(reverse=board.turn)
+        return random.choice(scored[:3])[1]
 
     scored_moves = []
 
@@ -151,14 +170,33 @@ def choose_ai_move(board, depth=2):
         reverse=maximizing_white
     )
 
+    # Select among top moves, but ensure list is not empty
     top_moves = scored_moves[:TOP_N_MOVES]
-    chosen_value, chosen_move = random.choice(top_moves)
+    
+    if not top_moves:
+        logger.error("No top moves available | fen=%s", board.fen())
+        return None
+    
+    # Among top-scored moves, prefer promotions-to-queen
+    best_score = top_moves[0][0]
+    tied_moves = [(v, m) for v, m in top_moves if v == best_score]
+    
+    # Further filter: prefer queen promotions among ties
+    queen_promotions = [m for v, m in tied_moves if m.promotion == chess.QUEEN]
+    if queen_promotions:
+        chosen_move = queen_promotions[0]
+    else:
+        # No queen promotions in ties; pick randomly among tied moves or first if only one
+        if len(tied_moves) > 1:
+            chosen_value, chosen_move = random.choice(tied_moves)
+        else:
+            chosen_value, chosen_move = tied_moves[0]
 
     logger.info(
         "AI selected move | uci=%s | turn=%s | eval=%s",
         chosen_move.uci(),
         "white" if board.turn else "black",
-        chosen_value
+        best_score
     )
 
     return chosen_move

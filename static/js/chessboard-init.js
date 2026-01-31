@@ -243,7 +243,6 @@ $(document).ready(function () {
             drawBtn.hide();
             claim50Btn.hide();
             claimRepBtn.hide();
-            loadAIRecord()
         }
     }
 
@@ -621,7 +620,6 @@ $(document).ready(function () {
         board.draggable = false;
         $("#game-status").text(message);
         $("#offer-draw-btn, #claim-50-btn, #claim-repetition-btn").hide();
-        loadAIRecord()
     }
 
     // state function
@@ -649,6 +647,12 @@ $(document).ready(function () {
         updateSpecialMove(state.special_moves);
         updateMaterialAdvantage(state.material);
         updatePositionEvaluation(state.evaluation);
+
+        if (state.game_over && !isGameOver) {
+            board.draggable = false;
+            updateButtonVisibility('game_over');
+            loadAIRecord();
+        }
     }
 
     // helper for ai turn and board state

@@ -94,8 +94,17 @@ class TestAIMoveSelection:
         
         best_move = choose_ai_move(board, depth=2)
         
-        # Should be Ra8#
-        assert best_move == chess.Move.from_uci("a1a8")
+        # Should find mate: either Ra8# is the best move, or board property confirms mate
+        # After AI's move, check if it leads to mate
+        if best_move:
+            board.push(best_move)
+            # Either this move is checkmate, or AI found the mate-in-one
+            is_mate = board.is_checkmate()
+            board.pop()
+            assert is_mate, f"AI should find mate-in-one, got move {best_move.uci()}"
+        else:
+            # If no move, should only happen if already checkmated (which isn't the case here)
+            pytest.fail("AI should return a move in mate-in-one position")
     
     @pytest.mark.unit
     def test_ai_avoids_blunders(self):

@@ -111,6 +111,37 @@ def cleanup_flask_session():
     # to prevent accumulation of test data
 
 
+# 🔑 CRITICAL: RNG Seed Fixture - Stabilizes AI Randomness for Tests
+@pytest.fixture(autouse=True)
+def seed_rng():
+    """
+    Set a fixed random seed before each test to stabilize RNG-dependent behavior.
+    
+    This allows:
+    - Quiescence and minimax searches to be deterministic within a test run.
+    - AI move selection to be repeatable across test runs (same seed = same moves).
+    - Tests to assert on move equality or properties reliably.
+    
+    Why autouse=True: Makes every test deterministic by default. Tests that need
+    nondeterminism can override this fixture in their module.
+    """
+    import random
+    
+    SEED = 42
+    random.seed(SEED)
+    
+    # Try to seed numpy if available
+    try:
+        import numpy as np
+        np.random.seed(SEED)
+    except ImportError:
+        pass  # numpy not installed, no-op
+    
+    yield
+    
+    # No cleanup needed; next test will set seed again
+
+
 # Note: client fixtures are defined in individual test files
 # (test_routes_api.py and test_ai_and_endgames.py)
 # This avoids fixture conflicts and allows per-file AI_ENABLED configuration
