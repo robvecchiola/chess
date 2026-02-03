@@ -262,24 +262,47 @@ $(document).ready(function () {
         });
     });
 
-    function updateStatus(turn, check, checkmate, stalemate, fifty_moves, can_claim_repetition, insufficient_material, game_over) {
+    function updateStatus(turn, check, checkmate, stalemate, fifty_moves, can_claim_repetition, insufficient_material, game_over, termination_reason, winner) {
+        // =========================
+        // GAME OVER (single source)
+        // =========================
+        if (game_over) {
+            let message = "Game over";
+
+            if (termination_reason === "resignation") {
+                message = `${capitalize(winner)} wins — resignation`;
+            } else if (termination_reason === "draw_by_agreement") {
+                message = "Draw — by agreement";
+            } else if (termination_reason === "draw_threefold_repetition") {
+                message = "Draw — threefold repetition";
+            } else if (termination_reason === "draw_50_move_rule") {
+                message = "Draw — 50-move rule";
+            } else if (checkmate) {
+                message = `${capitalize(winner)} wins — checkmate`;
+            } else if (stalemate) {
+                message = "Draw — stalemate";
+            } else if (insufficient_material) {
+                message = "Draw — insufficient material";
+            }
+
+            $("#game-status").text(message);
+            return; // 🚨 critical: stop here
+        }
+
+        // =========================
+        // GAME IN PROGRESS
+        // =========================
         let status;
-        if (checkmate) {
-            status = turn === 'white' ? "Black wins — Checkmate!" : "White wins — Checkmate!";
-        } else if (stalemate || insufficient_material || game_over) {
-            status = "Draw";
-        } else if (fifty_moves) {
+
+        if (fifty_moves) {
             status = "50-move rule available";
         } else if (can_claim_repetition) {
             status = "Threefold repetition available";
         } else {
-            if (turn === 'white') {
-                status = "White's turn";
-            } else {
-                status = "AI is thinking...";
-            }
-            if (check) status += " - Check!";
+            status = turn === "white" ? "White's turn" : "AI is thinking...";
+            if (check) status += " — Check!";
         }
+
         $("#game-status").text(status);
     }
 
@@ -525,25 +548,7 @@ $(document).ready(function () {
             data: JSON.stringify({ color: playerColor }),
             success: function (response) {
                 if (response.status === "ok") {
-                    updateStatus(
-                        null,
-                        false,
-                        false,
-                        false,
-                        false,
-                        false,
-                        false,
-                        true
-                    );
-
-                    $("#game-status").text(
-                        `${response.winner.charAt(0).toUpperCase() + response.winner.slice(1)} wins — resignation`
-                    );
-                    isGameOver = true;
-                    board.draggable = false;
-
-                    // 🔑 After resign: show New Game, hide Resign/Draw
-                    updateButtonVisibility('game_over');
+                    updateFromState(response);
                 }
             }
         });
@@ -568,17 +573,12 @@ $(document).ready(function () {
     // 🔑 OFFER DRAW BUTTON - Show New Game, hide Resign/Draw on click
     $("#offer-draw-btn").click(function () {
 
-        if (!canHumanMove()) return;
-
         $.ajax({
             url: "/draw-agreement",
             type: "POST",
             success: function (response) {
                 if (response.status === "ok") {
-                    endGameUI("Draw by agreement");
-                    
-                    // 🔑 After draw: show New Game, hide Resign/Draw
-                    updateButtonVisibility('game_over');
+                    updateFromState(response);
                 }
             },
             error: function () {
@@ -589,12 +589,10 @@ $(document).ready(function () {
 
     // 🔑 CLAIM 50-MOVE DRAW - Show New Game, hide Resign/Draw on claim
     $("#claim-50-btn").click(function () {
-        if (!canHumanMove()) return;
 
         $.post("/claim-draw/50-move", function (response) {
             if (response.status === "ok") {
-                endGameUI("Draw by 50-move rule");
-                updateButtonVisibility('game_over');
+                updateFromState(response);
             } else {
                 updateErrorMessage(response.message);
             }
@@ -603,24 +601,15 @@ $(document).ready(function () {
 
     // 🔑 CLAIM REPETITION DRAW - Show New Game, hide Resign/Draw on claim
     $("#claim-repetition-btn").click(function () {
-        if (!canHumanMove()) return;
 
         $.post("/claim-draw/repetition", function (response) {
             if (response.status === "ok") {
-                endGameUI("Draw by repetition");
-                updateButtonVisibility('game_over');
+                updateFromState(response);
             } else {
                 updateErrorMessage(response.message);
             }
         });
     });
-
-    function endGameUI(message) {
-        isGameOver = true;
-        board.draggable = false;
-        $("#game-status").text(message);
-        $("#offer-draw-btn, #claim-50-btn, #claim-repetition-btn").hide();
-    }
 
     // state function
     function updateFromState(state) {
@@ -638,7 +627,9 @@ $(document).ready(function () {
             state.fifty_moves,
             state.can_claim_repetition,
             state.insufficient_material,
-            state.game_over
+            state.game_over,
+            state.termination_reason,
+            state.winner
         );
 
         updateDrawButtons(state);
@@ -648,8 +639,11 @@ $(document).ready(function () {
         updateMaterialAdvantage(state.material);
         updatePositionEvaluation(state.evaluation);
 
-        if (state.game_over && !isGameOver) {
+        if (state.game_over) {
             board.draggable = false;
+            aiThinking = false;
+            aiInFlight = false;
+
             updateButtonVisibility('game_over');
             loadAIRecord();
         }
@@ -690,6 +684,10 @@ $(document).ready(function () {
 
     function canHumanMove() {
         return !isGameOver && !aiThinking && !aiInFlight && !moveInFlight;
+    }
+
+    function capitalize(str) {
+        return str.charAt(0).toUpperCase() + str.slice(1);
     }
 
 });

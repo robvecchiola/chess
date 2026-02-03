@@ -2,6 +2,7 @@ from datetime import datetime, timezone
 import uuid
 from flask import session
 from sqlalchemy import case, case, func
+from ai import evaluate_board, material_score
 from extensions import db
 import chess
 
@@ -451,4 +452,21 @@ def get_ai_record():
         "draws": draws,
         "win_rate": win_rate,
         "total": total
+    }
+
+def build_full_state(board, move_history, captured_pieces, special_moves):
+    return {
+        "fen": board.fen(),
+        "turn": "white" if board.turn == chess.WHITE else "black",
+        "check": board.is_check(),
+        "checkmate": board.is_checkmate(),
+        "stalemate": board.is_stalemate(),
+        "fifty_moves": board.is_fifty_moves(),
+        "can_claim_repetition": board.can_claim_threefold_repetition(),
+        "insufficient_material": board.is_insufficient_material(),
+        "move_history": move_history,
+        "captured_pieces": captured_pieces,
+        "special_moves": special_moves,
+        "material": material_score(board),
+        "evaluation": evaluate_board(board)
     }

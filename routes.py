@@ -5,7 +5,7 @@ from models import Game, GameMove, db
 from datetime import datetime
 
 from ai import choose_ai_move, material_score, evaluate_board
-from helpers import explain_illegal_move, finalize_game, finalize_game_if_over, get_active_game_or_abort, get_ai_record, get_game_state, get_or_create_player_uuid, init_game, log_game_action, save_game_state, execute_move, touch_game
+from helpers import build_full_state, explain_illegal_move, finalize_game, finalize_game_if_over, get_active_game_or_abort, get_ai_record, get_game_state, get_or_create_player_uuid, init_game, log_game_action, save_game_state, execute_move, touch_game
 
 import logging
 logger = logging.getLogger(__name__)
@@ -372,7 +372,7 @@ def register_routes(app):
             logger.warning("Resign attempt on ended game | game_id=%s", game_id)
             return jsonify({"status": "error", "message": "Game already ended"}), 400
 
-        board, *_ = get_game_state()
+        board, move_history, captured_pieces, special_moves = get_game_state()
 
         data = request.get_json()
         resigning_color = data.get("color")  # "white" or "black"
@@ -401,19 +401,28 @@ def register_routes(app):
         session.pop("captured_pieces", None)
         session.pop("special_moves", None)
 
-        return jsonify({
+        state = build_full_state(
+            board,
+            move_history,
+            captured_pieces,
+            special_moves
+        )
+
+        state.update({
             "status": "ok",
+            "game_over": True,
             "result": result,
             "winner": winner,
-            "termination_reason": "resignation",
-            "game_over": True
+            "termination_reason": "resignation"
         })
+
+        return jsonify(state)
     
     # 50-move rule draw claim
     @app.route("/claim-draw/50-move", methods=["POST"])
     def claim_50_move_draw():
         game_id = session.get("game_id")
-        board, *_ = get_game_state()
+        board, move_history, captured_pieces, special_moves = get_game_state()
         game = db.session.get(Game, game_id)
 
         if not game or game.ended_at:
@@ -434,13 +443,29 @@ def register_routes(app):
         if game:
             touch_game(game)
         logger.info("Draw claimed by 50-move rule | game_id=%s", game_id)
-        return jsonify({"status": "ok", "result": game.result})
+
+
+        state = build_full_state(
+            board,
+            move_history,
+            captured_pieces,
+            special_moves
+        )
+
+        state.update({
+            "status": "ok",
+            "game_over": True,
+            "result": "1/2-1/2",
+            "termination_reason": "draw_50_move_rule"
+        })
+
+        return jsonify(state)
   
     # claim threefold repetition draw
     @app.route("/claim-draw/repetition", methods=["POST"])
     def claim_repetition_draw():
         game_id = session.get("game_id")
-        board, *_ = get_game_state()
+        board, move_history, captured_pieces, special_moves = get_game_state()
         game = db.session.get(Game, game_id)
 
         if not game or game.ended_at:
@@ -461,13 +486,27 @@ def register_routes(app):
         if game:
             touch_game(game)
         logger.info("Draw claimed by threefold repetition | game_id=%s", game_id)
-        return jsonify({"status": "ok", "result": game.result})
+        state = build_full_state(
+            board,
+            move_history,
+            captured_pieces,
+            special_moves
+        )
+
+        state.update({
+            "status": "ok",
+            "game_over": True,
+            "result": "1/2-1/2",
+            "termination_reason": "draw_threefold_repetition"
+        })
+
+        return jsonify(state)
     
     # draw agreement route
     @app.route("/draw-agreement", methods=["POST"])
     def draw_agreement():
         game_id = session.get("game_id")
-        board, *_ = get_game_state()
+        board, move_history, captured_pieces, special_moves = get_game_state()
         game = db.session.get(Game, game_id)
 
         if not game or game.ended_at:
@@ -484,7 +523,21 @@ def register_routes(app):
         if game:
             touch_game(game)
         logger.info("Draw agreed by both players | game_id=%s", game_id)
-        return jsonify({"status": "ok", "result": game.result})
+        state = build_full_state(
+            board,
+            move_history,
+            captured_pieces,
+            special_moves
+        )
+
+        state.update({
+            "status": "ok",
+            "game_over": True,
+            "result": "1/2-1/2",
+            "termination_reason": "draw_by_agreement"
+        })
+
+        return jsonify(state)
     
     ##### route to get AI record ######
     @app.route("/stats/ai-record")
