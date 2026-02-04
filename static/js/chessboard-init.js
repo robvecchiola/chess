@@ -79,7 +79,7 @@ $(document).ready(function () {
 
     // 🔑 INITIALIZE BUTTON VISIBILITY - Hide New Game, show Resign/Draw on page load
     // Only hide reset if game is active (not game over)
-    const initialGameState = config.gameOver ? 'game_over' : 'game_active';
+    const initialGameState = config.game_over ? 'game_over' : 'game_active';
     updateButtonVisibility(initialGameState);
 
     // If it's AI's turn on page load, trigger AI move
@@ -122,7 +122,6 @@ $(document).ready(function () {
                     rollbackPosition();
                     const errorMsg = response.message || "Illegal move!";
                     updateErrorMessage(errorMsg);
-                    updateStatus(currentTurn, false, false, false, false, false, false, false);
                 }
             },
 
@@ -135,7 +134,6 @@ $(document).ready(function () {
                     ? xhr.responseJSON.message 
                     : "Server error";
                 updateErrorMessage(errorMsg);
-                updateStatus(currentTurn, false, false, false, false, false, false, false);
             }
         });
 
@@ -262,45 +260,56 @@ $(document).ready(function () {
         });
     });
 
-    function updateStatus(turn, check, checkmate, stalemate, fifty_moves, can_claim_repetition, insufficient_material, game_over, termination_reason, winner) {
+    function updateStatus(state) {
         // =========================
-        // GAME OVER (single source)
+        // GAME OVER (authoritative)
         // =========================
-        if (game_over) {
+        if (state.game_over) {
             let message = "Game over";
 
-            if (termination_reason === "resignation") {
-                message = `${capitalize(winner)} wins — resignation`;
-            } else if (termination_reason === "draw_by_agreement") {
-                message = "Draw — by agreement";
-            } else if (termination_reason === "draw_threefold_repetition") {
-                message = "Draw — threefold repetition";
-            } else if (termination_reason === "draw_50_move_rule") {
-                message = "Draw — 50-move rule";
-            } else if (checkmate) {
-                message = `${capitalize(winner)} wins — checkmate`;
-            } else if (stalemate) {
-                message = "Draw — stalemate";
-            } else if (insufficient_material) {
-                message = "Draw — insufficient material";
+            switch (state.termination_reason) {
+                case "resignation":
+                    message = `${capitalize(state.winner)} wins — resignation`;
+                    break;
+                case "checkmate":
+                    message = `${capitalize(state.winner)} wins — checkmate`;
+                    break;
+                case "draw_by_agreement":
+                    message = "Draw — by agreement";
+                    break;
+                case "draw_threefold_repetition":
+                    message = "Draw — threefold repetition";
+                    break;
+                case "draw_50_move_rule":
+                    message = "Draw — 50-move rule";
+                    break;
+                case "stalemate":
+                    message = "Draw — stalemate";
+                    break;
+                case "insufficient_material":
+                    message = "Draw — insufficient material";
+                    break;
             }
 
             $("#game-status").text(message);
-            return; // 🚨 critical: stop here
+            return;
         }
 
         // =========================
-        // GAME IN PROGRESS
+        // GAME ACTIVE
         // =========================
         let status;
 
-        if (fifty_moves) {
+        if (state.fifty_moves) {
             status = "50-move rule available";
-        } else if (can_claim_repetition) {
+        } else if (state.can_claim_repetition) {
             status = "Threefold repetition available";
         } else {
-            status = turn === "white" ? "White's turn" : "AI is thinking...";
-            if (check) status += " — Check!";
+            status =
+                state.turn === "white"
+                    ? "White's turn"
+                    : "AI is thinking...";
+            if (state.check) status += " — Check!";
         }
 
         $("#game-status").text(status);
@@ -619,18 +628,7 @@ $(document).ready(function () {
         currentTurn = state.turn;
         isGameOver = state.game_over;
 
-        updateStatus(
-            state.turn,
-            state.check,
-            state.checkmate,
-            state.stalemate,
-            state.fifty_moves,
-            state.can_claim_repetition,
-            state.insufficient_material,
-            state.game_over,
-            state.termination_reason,
-            state.winner
-        );
+        updateStatus(state);
 
         updateDrawButtons(state);
         updateCaptured(state.captured_pieces);
@@ -655,8 +653,6 @@ $(document).ready(function () {
 
         // Not AI's turn → unlock board
         if (state.turn !== "black") {
-            aiThinking = false;
-            board.draggable = true;
             return;
         }
 
