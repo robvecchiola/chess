@@ -140,7 +140,8 @@ def choose_ai_move(board, depth=2):
             board.pop()
             scored.append((score, move))
 
-        scored.sort(reverse=board.turn)
+        # Sort by score (first element of tuple) in descending order (maximize)
+        scored.sort(key=lambda x: x[0], reverse=True)
         return random.choice(scored[:3])[1]
 
     scored_moves = []
