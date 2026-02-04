@@ -142,7 +142,14 @@ def choose_ai_move(board, depth=2):
 
         # Sort by score (first element of tuple) in descending order (maximize)
         scored.sort(key=lambda x: x[0], reverse=True)
-        return random.choice(scored[:3])[1]
+        
+        # Select from top 3 (or fewer if less than 3 available)
+        if scored:
+            top_moves = scored[:min(3, len(scored))]
+            return random.choice(top_moves)[1]
+        else:
+            # No legal moves available (shouldn't happen, but be safe)
+            return None
 
     scored_moves = []
 
