@@ -8,7 +8,6 @@ $(document).ready(function () {
     let lastPosition = null;
     let currentTurn = config.turn || 'white';
     let isGameOver = false;
-    let aiThinking = false;
     let aiInFlight = false;
     let moveInFlight = false;
 
@@ -86,14 +85,11 @@ $(document).ready(function () {
     maybeTriggerAiTurn({turn: currentTurn, game_over: isGameOver});
 
     // Send move to server
-    function sendMove(source, target, promotionPiece=null) {
-
+    function sendMove(source, target, promotionPiece = null) {
         if (!canHumanMove()) return;
 
         moveInFlight = true;
         board.draggable = false;
-
-        $("#game-status").text("Processing move…");
 
         const payload = { from: source, to: target };
         if (promotionPiece) payload.promotion = promotionPiece;
@@ -108,35 +104,22 @@ $(document).ready(function () {
                 moveInFlight = false;
 
                 if (response.status === "ok") {
-
-                    pendingPromotion = null;
-                    updateErrorMessage("");
-
-                    updateFromState(response);          
+                    updateFromState(response);
                     maybeTriggerAiTurn(response);
-
                 } else {
-
-                    aiThinking = false;
-                    board.draggable = true;
                     rollbackPosition();
-                    const errorMsg = response.message || "Illegal move!";
-                    updateErrorMessage(errorMsg);
+                    updateErrorMessage(response.message || "Illegal move");
+                    board.draggable = true;
                 }
             },
 
-            error: function(xhr) {
+            error: function () {
                 moveInFlight = false;
-                aiThinking = false;
-                board.draggable = true;
                 rollbackPosition();
-                const errorMsg = xhr.responseJSON && xhr.responseJSON.message 
-                    ? xhr.responseJSON.message 
-                    : "Server error";
-                updateErrorMessage(errorMsg);
+                board.draggable = true;
+                updateErrorMessage("Server error");
             }
         });
-
     }
 
     window.sendMove = sendMove;
@@ -249,7 +232,6 @@ $(document).ready(function () {
             if (response.status === "ok") {
                 pendingPromotion = null;
                 lastPosition = null;
-                aiThinking = false;
                 board.draggable = true;
 
                 updateErrorMessage("");
@@ -308,7 +290,7 @@ $(document).ready(function () {
             status =
                 state.turn === "white"
                     ? "White's turn"
-                    : "AI is thinking...";
+                    : "Black's turn";
             if (state.check) status += " — Check!";
         }
 
@@ -624,6 +606,9 @@ $(document).ready(function () {
     function updateFromState(state) {
         if (!state) return;
 
+        pendingPromotion = null;
+        updateErrorMessage("");
+
         board.position(state.fen);
         currentTurn = state.turn;
         isGameOver = state.game_over;
@@ -639,7 +624,6 @@ $(document).ready(function () {
 
         if (state.game_over) {
             board.draggable = false;
-            aiThinking = false;
             aiInFlight = false;
 
             updateButtonVisibility('game_over');
@@ -651,35 +635,30 @@ $(document).ready(function () {
     function maybeTriggerAiTurn(state) {
         if (!state || state.game_over) return;
 
-        // Not AI's turn → unlock board
+        // Only AI plays black
         if (state.turn !== "black") {
+            board.draggable = true;
             return;
         }
 
-        // AI already thinking → do nothing
+        // Already waiting on AI
         if (aiInFlight) return;
 
-        // Lock everything
         aiInFlight = true;
-        aiThinking = true;
         board.draggable = false;
 
         $.post("/ai-move", function (aiResponse) {
             aiInFlight = false;
-            aiThinking = false;
-            board.draggable = true;
-
             updateFromState(aiResponse);
         }).fail(function () {
-            // Always unlock on failure
             aiInFlight = false;
-            aiThinking = false;
             board.draggable = true;
+            updateErrorMessage("AI move failed.");
         });
     }
 
     function canHumanMove() {
-        return !isGameOver && !aiThinking && !aiInFlight && !moveInFlight;
+        return !isGameOver && !aiInFlight && !moveInFlight;
     }
 
     function capitalize(str) {
