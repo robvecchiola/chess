@@ -471,5 +471,6 @@ def build_full_state(board, move_history, captured_pieces, special_moves):
         "captured_pieces": captured_pieces,
         "special_moves": special_moves,
         "material": material_score(board),
-        "evaluation": evaluate_board(board)
+        "evaluation": evaluate_board(board),
+        "game_over": board.is_game_over()
     }

@@ -73,8 +73,21 @@ $(document).ready(function () {
 
     window.board = board;
 
-    // Initialize UI with backend values
-    updateFromState(config);
+    // Initialize UI with backend values but don't overwrite server-rendered
+    // status text immediately (prevents races when session cookie isn't set).
+    // Board position was already applied during Chessboard construction.
+    pendingPromotion = null;
+    updateErrorMessage("");
+    currentTurn = config.turn || currentTurn;
+    isGameOver = config.game_over || false;
+
+    // Populate non-status UI elements from server config
+    updateDrawButtons(config);
+    updateCaptured(config.captured_pieces);
+    updateMoveHistory(config.move_history);
+    updateSpecialMove(config.special_moves);
+    updateMaterialAdvantage(config.material);
+    updatePositionEvaluation(config.evaluation);
 
     // 🔑 INITIALIZE BUTTON VISIBILITY - Hide New Game, show Resign/Draw on page load
     // Only hide reset if game is active (not game over)
@@ -652,14 +665,13 @@ $(document).ready(function () {
         board.draggable = false;
 
         $.post("/ai-move", function (aiResponse) {
+            if (isGameOver) return;
+
             aiInFlight = false;
-            // If the game was finalized (resignation/checkmate) while the AI
-            // request was in flight, avoid overwriting the authoritative
-            // game-over state with a stale AI response.
-            if (!isGameOver) {
-                updateFromState(aiResponse);
-            }
+            updateFromState(aiResponse);
+
         }).fail(function () {
+            if (isGameOver) return;
             aiInFlight = false;
             board.draggable = true;
             updateErrorMessage("AI move failed.");

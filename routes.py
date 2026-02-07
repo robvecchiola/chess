@@ -252,6 +252,17 @@ def register_routes(app):
     # ai move route
     @app.route("/ai-move", methods=["POST"])
     def ai_move():
+
+        game_id = session.get("game_id")
+        game = db.session.get(Game, game_id) if game_id else None
+
+        # If game exists and has ended (ended_at set), don't allow AI moves
+        if game and game.ended_at is not None:
+            return jsonify({
+                "status": "ok",
+                "game_over": True,
+            }), 400
+
         board, move_history, captured_pieces, special_moves = get_game_state()
 
         # Only move if game still active

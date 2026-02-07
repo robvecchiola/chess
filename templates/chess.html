@@ -149,9 +149,9 @@
             fen: {{ initial_position | tojson }},
             material: {{ initial_material | default(0) }},
             evaluation: {{ initial_evaluation | default(0) }},
-            moveHistory: {{ initial_move_history | tojson }},
-            capturedPieces: {{ initial_captured_pieces | tojson }},
-            specialMoves: {{ initial_special_moves | tojson }},
+            move_history: {{ initial_move_history | tojson }},
+            captured_pieces: {{ initial_captured_pieces | tojson }},
+            special_moves: {{ initial_special_moves | tojson }},
             turn: {{ initial_turn | tojson }},
             check: {{ initial_check | default(False) | tojson }},
             checkmate: {{ initial_checkmate | default(False) | tojson }},
@@ -159,8 +159,8 @@
             fifty_moves: {{ initial_fifty_moves | default(False) | tojson }},
             can_claim_repetition: {{ initial_can_claim_repetition | default(False) | tojson }},
             insufficient_material: {{ initial_insufficient_material | default(False) | tojson }},
-            aiEnabled: {{ ai_enabled | tojson }},
-            gameOver: {{ initial_game_over | tojson }}
+            ai_enabled: {{ ai_enabled | tojson }},
+            game_over: {{ initial_game_over | tojson }}
         };
     </script>
     <script src="{{ url_for('static', filename='js/chessboard-init.js') }}"></script>
