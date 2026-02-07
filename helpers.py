@@ -41,6 +41,8 @@ def init_game():
     session["move_history"] = []
     session["captured_pieces"] = {"white": [], "black": []}
     session["special_moves"] = []
+    session.modified = True
+
 
 
 def get_game_state():
@@ -81,6 +83,7 @@ def save_game_state(board, move_history, captured_pieces, special_moves):
     session['special_moves'] = special_moves
 
     logger.debug("Game state saved | fen=%s", board.fen())
+    session.modified = True
 
 
 def execute_move(board, move, move_history, captured_pieces, special_moves, is_ai=False):

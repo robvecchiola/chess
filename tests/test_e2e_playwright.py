@@ -1314,10 +1314,30 @@ def test_resign_after_moves(page: Page, live_server):
     status = page.locator("#game-status")
     expect(status).to_contain_text("White's turn", timeout=10000)
     
-    # Click resign
-    page.click("#resign-btn")
+    # Wait for resign button to be visible and clickable
+    resign_btn = page.locator("#resign-btn")
+    expect(resign_btn).to_be_visible()
+    
+    # Intercept the resign response to debug
+    with page.expect_response(lambda resp: "/resign" in resp.url) as response_info:
+        resign_btn.click()
+    
+    resign_response = response_info.value
+    resign_data = resign_response.json()
+    
+    # Debug: Print resign response
+    import json
+    print(f"[TEST] Resign response status: {resign_response.status}")
+    print(f"[TEST] Resign response body: {json.dumps(resign_data, indent=2)}")
+    
+    # Wait for status to update
+    page.wait_for_load_state("networkidle")
+    page.wait_for_timeout(1000)
     
     # Should show black wins by resignation
     status = page.locator("#game-status")
-    expect(status).to_contain_text("Black wins")
+    status_text = status.text_content()
+    print(f"[TEST] Final status text: {status_text}")
+    
+    expect(status).to_contain_text("Black wins", timeout=5000)
     expect(status).to_contain_text("resignation")

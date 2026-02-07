@@ -29,9 +29,7 @@ def evaluate_board(board):
             else:
                 score -= value + table[chess.square_mirror(square)]
     
-    noise = random.randint(-8, 8)  # centipawns
-    return score + noise
-
+    return score 
 
 
 def quiescence(board, alpha, beta, depth=0, max_depth=4):
@@ -132,7 +130,13 @@ def choose_ai_move(board, depth=2):
     #        return random.choice(legal)
 
     # opening book on the fly
-    if board.fullmove_number <= 2:
+
+    is_true_opening = (
+    board.board_fen() == chess.STARTING_BOARD_FEN
+    and len(board.move_stack) <= 1
+    )
+
+    if is_true_opening:
         scored = []
         for move in board.legal_moves:
             board.push(move)
@@ -155,18 +159,15 @@ def choose_ai_move(board, depth=2):
 
     maximizing_white = board.turn == chess.WHITE
 
-    for move in order_moves(board):
+    for move in board.legal_moves:
         board.push(move)
-        value = minimax(
-            board,
-            depth - 1,
-            -math.inf,
-            math.inf,
-            not maximizing_white
-        )
+        if board.is_checkmate():
+            board.pop()
+            return move
+        score = evaluate_board(board)
         board.pop()
+        scored_moves.append((score, move))
 
-        scored_moves.append((value, move))
 
     if not scored_moves:
         logger.error("AI failed to select a move | fen=%s", board.fen())
@@ -194,11 +195,68 @@ def choose_ai_move(board, depth=2):
     if queen_promotions:
         chosen_move = queen_promotions[0]
     else:
-        # No queen promotions in ties; pick randomly among tied moves or first if only one
-        if len(tied_moves) > 1:
-            chosen_value, chosen_move = random.choice(tied_moves)
+        # No queen promotions in ties; filter out moves that hang high-value pieces
+        safe_moves = []
+        moving_side = board.turn  # Color before the move
+        
+        for value, move in tied_moves:
+            board.push(move)
+            is_hanging = False
+            
+            # Check if any Queen or Rook of the moving side is now undefended and attacked
+            for square in chess.SQUARES:
+                piece = board.piece_at(square)
+                if piece and piece.color == moving_side and piece.piece_type in (chess.QUEEN, chess.ROOK):
+                    attackers = board.attackers(not moving_side, square)
+                    if attackers:
+                        defenders = board.attackers(moving_side, square)
+                        if not defenders:
+                            is_hanging = True
+                            break
+            
+            board.pop()
+            
+            if not is_hanging:
+                safe_moves.append((value, move))
+        
+        # If no safe moves in the tied group, search broader: find best non-hanging move
+        # from all scored moves, not just the top 3
+        if not safe_moves:
+            for value, move in scored_moves:
+                board.push(move)
+                is_hanging = False
+                
+                for square in chess.SQUARES:
+                    piece = board.piece_at(square)
+                    if piece and piece.color == moving_side and piece.piece_type in (chess.QUEEN, chess.ROOK):
+                        attackers = board.attackers(not moving_side, square)
+                        if attackers:
+                            defenders = board.attackers(moving_side, square)
+                            if not defenders:
+                                is_hanging = True
+                                break
+                
+                board.pop()
+                
+                if not is_hanging:
+                    safe_moves.append((value, move))
+                    break  # Take the first (best) non-hanging move from full list
+        
+        # Choose from safe moves; prefer random among equally-ranked, or best available
+        if safe_moves:
+            # Group by score and prefer highest score
+            best_safe_score = safe_moves[0][0]
+            top_safe = [m for v, m in safe_moves if v == best_safe_score]
+            if len(top_safe) > 1:
+                chosen_move = random.choice(top_safe)
+            else:
+                chosen_move = top_safe[0]
         else:
-            chosen_value, chosen_move = tied_moves[0]
+            # All moves hang; fall back to random from tied_moves (shouldn't reach here in normal positions)
+            if len(tied_moves) > 1:
+                chosen_value, chosen_move = random.choice(tied_moves)
+            else:
+                chosen_value, chosen_move = tied_moves[0]
 
     logger.info(
         "AI selected move | uci=%s | turn=%s | eval=%s",

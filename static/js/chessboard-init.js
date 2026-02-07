@@ -539,7 +539,11 @@ $(document).ready(function () {
             data: JSON.stringify({ color: playerColor }),
             success: function (response) {
                 if (response.status === "ok") {
+                    // Ensure UI reflects game-over state immediately and avoid
+                    // races with other async updates (AI, polling, etc.).
+                    isGameOver = true;
                     updateFromState(response);
+                    updateButtonVisibility('game_over');
                 }
             }
         });
@@ -649,7 +653,12 @@ $(document).ready(function () {
 
         $.post("/ai-move", function (aiResponse) {
             aiInFlight = false;
-            updateFromState(aiResponse);
+            // If the game was finalized (resignation/checkmate) while the AI
+            // request was in flight, avoid overwriting the authoritative
+            // game-over state with a stale AI response.
+            if (!isGameOver) {
+                updateFromState(aiResponse);
+            }
         }).fail(function () {
             aiInFlight = false;
             board.draggable = true;
