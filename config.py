@@ -37,6 +37,16 @@ class TestingConfig(BaseConfig):
         "mysql+pymysql://chess_tester:strongpassword@localhost/chess_app_test"
     )
     
+    # 🗄️ Connection pool tuning for tests - aggressively recycle connections
+    # to prevent "Too many connections" errors in large test suites
+    SQLALCHEMY_ENGINE_OPTIONS = {
+        "pool_pre_ping": True,      # Verify connections before use
+        "pool_recycle": 3600,        # Recycle connections after 1 hour
+        "pool_size": 5,              # Smaller pool for tests (default is 10)
+        "max_overflow": 10,          # Allow overflow up to 15 total
+        "echo_pool": False,          # Set True to debug pool issues
+    }
+    
     # 🗄️ Use filesystem sessions for tests that check session files
     SESSION_TYPE = 'filesystem'
     SESSION_FILE_DIR = os.path.join(BASE_DIR, 'flask_session')
@@ -51,6 +61,16 @@ class TestingConfigFilesystem(BaseConfig):
     SQLALCHEMY_DATABASE_URI = (
         "mysql+pymysql://chess_tester:strongpassword@localhost/chess_app_test"
     )
+    
+    # 🗄️ Connection pool tuning for tests - aggressively recycle connections
+    # to prevent "Too many connections" errors in large test suites
+    SQLALCHEMY_ENGINE_OPTIONS = {
+        "pool_pre_ping": True,      # Verify connections before use
+        "pool_recycle": 3600,        # Recycle connections after 1 hour
+        "pool_size": 5,              # Smaller pool for tests
+        "max_overflow": 10,          # Allow overflow up to 15 total
+        "echo_pool": False,          # Set True to debug pool issues
+    }
     
     # 🗄️ Use filesystem sessions for tests that check session files
     SESSION_TYPE = 'filesystem'

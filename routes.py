@@ -5,7 +5,7 @@ from models import Game, GameMove, db
 from datetime import datetime
 
 from ai import choose_ai_move, material_score, evaluate_board
-from helpers import build_full_state, explain_illegal_move, finalize_game, finalize_game_if_over, get_active_game_or_abort, get_ai_record, get_game_state, get_or_create_player_uuid, init_game, log_game_action, save_game_state, execute_move, touch_game
+from helpers import build_full_state, explain_illegal_move, finalize_game, finalize_game_if_over, game_over_response_from_session, get_active_game_or_abort, get_ai_record, get_game_state, get_or_create_player_uuid, init_game, log_game_action, save_game_state, execute_move, touch_game
 
 import logging
 logger = logging.getLogger(__name__)
@@ -92,27 +92,12 @@ def register_routes(app):
 
         if game and not is_active:
             logger.info("[%s] Move rejected: game already ended", move_id)
-            return jsonify({
-                "status": "game_over",
+            return game_over_response_from_session(extra={
                 "message": "This game has already ended.",
                 "result": game.result,
                 "termination_reason": game.termination_reason,
-                "fen": board.fen(),
-                "turn": "white" if board.turn == chess.WHITE else "black",
-                "check": board.is_check(),
-                "checkmate": board.is_checkmate(),
-                "stalemate": board.is_stalemate(),
-                "fifty_moves": board.is_fifty_moves(),
-                "can_claim_repetition": board.can_claim_threefold_repetition(),
-                "fivefold_repetition": board.is_fivefold_repetition(),
-                "insufficient_material": board.is_insufficient_material(),
-                "game_over": True,
-                "move_history": move_history,
-                "captured_pieces": captured_pieces,
-                "material": material_score(board),
-                "evaluation": evaluate_board(board)
-            }), 400
-
+            })
+ 
         logger.debug("[%s] Session keys: %s", move_id, list(session.keys()))
         logger.debug("[%s] Session FEN: %s", move_id, session.get("fen"))
         logger.debug("[%s] Board FEN: %s", move_id, board.fen())
@@ -256,14 +241,10 @@ def register_routes(app):
         game_id = session.get("game_id")
         game = db.session.get(Game, game_id) if game_id else None
 
-        # If game exists and has ended (ended_at set), don't allow AI moves
-        if game and game.ended_at is not None:
-            return jsonify({
-                "status": "ok",
-                "game_over": True,
-            }), 400
-
         board, move_history, captured_pieces, special_moves = get_game_state()
+
+        if game and game.ended_at is not None:
+            return game_over_response_from_session()
 
         # Only move if game still active
         if board.is_game_over():
@@ -438,7 +419,7 @@ def register_routes(app):
 
         if not game or game.ended_at:
             logger.warning("50-move draw claim on ended game | game_id=%s", game_id)
-            return jsonify({"status": "game_over"})
+            return game_over_response_from_session()
 
         if not board.is_fifty_moves():
             logger.debug("50-move draw claim invalid | game_id=%s | halfmove_clock=%s", game_id, board.halfmove_clock)
@@ -481,7 +462,7 @@ def register_routes(app):
 
         if not game or game.ended_at:
             logger.warning("Repetition draw claim on ended game | game_id=%s", game_id)
-            return jsonify({"status": "game_over"})
+            return game_over_response_from_session()
 
         if not board.can_claim_threefold_repetition():
             logger.debug("Repetition draw claim invalid | game_id=%s", game_id)
@@ -522,7 +503,7 @@ def register_routes(app):
 
         if not game or game.ended_at:
             logger.warning("Draw agreement on ended game | game_id=%s", game_id)
-            return jsonify({"status": "game_over"})
+            return game_over_response_from_session()
         
         log_game_action(
             game,
@@ -634,14 +615,11 @@ def register_routes(app):
         
         session.modified = True
         
-        return jsonify({
-            "status": "ok",
-            "fen": board.fen(),
-            "turn": "white" if board.turn == chess.WHITE else "black",
-            "check": board.is_check(),
-            "checkmate": board.is_checkmate(),
-            "stalemate": board.is_stalemate(),
-            "game_over": board.is_game_over(),
-            "material": material_score(board),
-            "evaluation": evaluate_board(board)
-        })
+        state = build_full_state(
+            board,
+            session.get("move_history", []),
+            session.get("captured_pieces", {'white': [], 'black': []}),
+            session.get("special_moves", [])
+        )
+        state.update({"status": "ok"})
+        return jsonify(state)

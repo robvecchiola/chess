@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 import uuid
-from flask import session
+from flask import jsonify, session
 from sqlalchemy import case, case, func
 from ai import evaluate_board, material_score
 from extensions import db
@@ -474,3 +474,14 @@ def build_full_state(board, move_history, captured_pieces, special_moves):
         "evaluation": evaluate_board(board),
         "game_over": board.is_game_over()
     }
+
+#something for somethin
+def game_over_response_from_session(status="game_over", extra=None):
+    board, move_history, captured_pieces, special_moves = get_game_state()
+    state = build_full_state(board, move_history, captured_pieces, special_moves)
+    state.update({"status": status, "game_over": True})
+
+    if extra:
+        state.update(extra)
+        
+    return jsonify(state), 400

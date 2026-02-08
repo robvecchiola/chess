@@ -679,7 +679,7 @@ $(document).ready(function () {
     }
 
     function canHumanMove() {
-        return !isGameOver && !aiInFlight && !moveInFlight;
+        return !isGameOver && !aiInFlight && !moveInFlight && currentTurn === playerColor;
     }
 
     function capitalize(str) {

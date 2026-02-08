@@ -100,6 +100,11 @@ def cleanup_flask_session():
             Game.query.delete()
             db.session.commit()
             print(f"[CLEANUP] Cleared database Game records")
+            
+            # 🔑 CRITICAL: Properly dispose the engine to return all connections to pool
+            # This is required to prevent "Too many connections" errors in large test suites
+            db.engine.dispose()
+            print(f"[CLEANUP] Disposed database engine connections")
     except Exception as e:
         print(f"[CLEANUP] Warning: Failed to clear database: {e}")
     
