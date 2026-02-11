@@ -103,6 +103,9 @@ def execute_move(board, move, move_history, captured_pieces, special_moves, is_a
 
     # 🔑 Determine who is making the move BEFORE board state changes
     moving_color = "White" if board.turn == chess.WHITE else "Black"
+    
+    # Capture the moving piece BEFORE board state changes (needed for fallback detection)
+    moving_piece = board.piece_at(move.from_square)
 
     # Detect special move
     special_move = None
@@ -161,7 +164,7 @@ def execute_move(board, move, move_history, captured_pieces, special_moves, is_a
         try:
             # If the moving piece was a pawn and landed on the last rank,
             # and the destination now contains a non-pawn piece, treat as promotion.
-            if ('from_piece' in locals()) and from_piece and from_piece.piece_type == chess.PAWN:
+            if moving_piece and moving_piece.piece_type == chess.PAWN:
                 if chess.square_rank(move.to_square) in (0, 7):
                     promoted = board.piece_at(move.to_square)
                     if promoted and promoted.piece_type != chess.PAWN:

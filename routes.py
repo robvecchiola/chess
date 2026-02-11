@@ -606,11 +606,10 @@ def register_routes(app):
         
         session.modified = True
         
-        state = build_full_state(
-            board,
-            session.get("move_history", []),
-            session.get("captured_pieces", {'white': [], 'black': []}),
-            session.get("special_moves", [])
+        return state_response(
+            status="ok",
+            board=board,
+            move_history=session.get("move_history", []),
+            captured_pieces=session.get("captured_pieces", {'white': [], 'black': []}),
+            special_moves=session.get("special_moves", []),
         )
-        state.update({"status": "ok"})
-        return jsonify(state)

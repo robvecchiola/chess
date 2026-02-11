@@ -83,6 +83,10 @@ def setup_board_position(page: Page, fen: str, move_history=None,
     window.CHESS_CONFIG.checkmate = {json.dumps(result['checkmate'])};
     window.CHESS_CONFIG.stalemate = {json.dumps(result['stalemate'])};
     window.CHESS_CONFIG.game_over = {json.dumps(result['game_over'])};
+    window.CHESS_CONFIG.fifty_moves = {json.dumps(result['fifty_moves'])};
+    window.CHESS_CONFIG.can_claim_repetition = {json.dumps(result['can_claim_repetition'])};
+    window.CHESS_CONFIG.insufficient_material = {json.dumps(result['insufficient_material'])};
+    window.CHESS_CONFIG.termination_reason = {json.dumps(result.get('termination_reason'))};
     
     // Now manually call the update functions that chessboard-init.js would call on page load
     // First, reinit the chessboard with the new FEN
@@ -100,9 +104,22 @@ def setup_board_position(page: Page, fen: str, move_history=None,
         updatePositionEvaluation(window.CHESS_CONFIG.evaluation);
     }}
     
-    // Update status - pass the full config object
-    if (typeof updateStatus === 'function') {{
-        updateStatus(window.CHESS_CONFIG);
+    // Manually update the status element to ensure check is properly displayed
+    const statusElement = document.getElementById('game-status');
+    if (statusElement) {{
+        // Build status considering fifty_moves, can_claim_repetition, check, turn
+        let finalStatus;
+        if (window.CHESS_CONFIG.fifty_moves) {{
+            finalStatus = "50-move rule available";
+        }} else if (window.CHESS_CONFIG.can_claim_repetition) {{
+            finalStatus = "Threefold repetition available";
+        }} else {{
+            finalStatus = window.CHESS_CONFIG.turn === "white" ? "White's turn" : "Black's turn";
+            if (window.CHESS_CONFIG.check) {{
+                finalStatus += " — Check!";
+            }}
+        }}
+        statusElement.textContent = finalStatus;
     }}
     
     // Update move history display
@@ -133,14 +150,9 @@ def setup_board_position(page: Page, fen: str, move_history=None,
     # Wait for any DOM updates to finish
     page.wait_for_timeout(500)
     
-    # 🔍 DEBUG: Check what the page has NOW
-    config_fen = page.evaluate("window.CHESS_CONFIG?.fen")
-    config_material = page.evaluate("window.CHESS_CONFIG?.material")
-    print(f"[SETUP] After state update - CHESS_CONFIG.fen = {config_fen}")
-    print(f"[SETUP] After state update - CHESS_CONFIG.material = {config_material}")
-    
-    # 🔑 VERIFY: The state was updated correctly
+    # Verify: The state was updated correctly
     # Note: Castling rights may be modified by the chess engine, so we only check the board position part
+    config_fen = page.evaluate("window.CHESS_CONFIG?.fen")
     fen_board_only = fen.split(' ')[0]  # Just the position part, ignore castling/ep/etc
     config_fen_board_only = config_fen.split(' ')[0] if config_fen else ""
     
