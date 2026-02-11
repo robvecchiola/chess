@@ -117,7 +117,7 @@ $(document).ready(function () {
             success: function (response) {
                 moveInFlight = false;
 
-                if (response.status === "ok") {
+                if (response.status === "ok" || response.status === "game_over") {
                     updateFromState(response);
                     maybeTriggerAiTurn(response);
                 } else {
@@ -146,16 +146,25 @@ $(document).ready(function () {
             },
             
             statusCode: {
-                400: function (response) {
+                400: function (xhr) {
                     moveInFlight = false;
-                    
-                    if (response.status === "ok") {
-                        updateFromState(response);
-                        maybeTriggerAiTurn(response);
-                    } else {
+
+                    try {
+                        const response = JSON.parse(xhr.responseText);
+
+                        if (response.status === "game_over") {
+                            updateFromState(response);
+                            return;
+                        }
+
                         rollbackPosition();
                         updateErrorMessage(response.message || "Illegal move");
                         board.draggable = true;
+
+                    } catch (e) {
+                        rollbackPosition();
+                        board.draggable = true;
+                        updateErrorMessage("Illegal move");
                     }
                 },
                 500: function (response) {
@@ -698,9 +707,9 @@ $(document).ready(function () {
         board.draggable = false;
 
         $.post("/ai-move", function (aiResponse) {
+            aiInFlight = false;
             if (isGameOver) return;
 
-            aiInFlight = false;
             updateFromState(aiResponse);
 
         }).fail(function () {
