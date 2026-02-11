@@ -70,7 +70,7 @@ def minimax(board, depth, alpha, beta, maximizing_white):
 
     if maximizing_white:
         max_eval = -math.inf
-        for move in board.legal_moves:
+        for move in order_moves(board): 
             board.push(move)
             eval = minimax(board, depth - 1, alpha, beta, False)
             board.pop()
@@ -81,7 +81,7 @@ def minimax(board, depth, alpha, beta, maximizing_white):
         return max_eval
     else:
         min_eval = math.inf
-        for move in board.legal_moves:
+        for move in order_moves(board):
             board.push(move)
             eval = minimax(board, depth - 1, alpha, beta, True)
             board.pop()
@@ -109,7 +109,7 @@ def order_moves(board):
     return promotions + captures + others
 
 
-def choose_ai_move(board, depth=2):
+def choose_ai_move(board, depth=3):
     logger.debug(
         "AI evaluating position | turn=%s | depth=%s | fen=%s",
         "white" if board.turn else "black",
@@ -164,7 +164,7 @@ def choose_ai_move(board, depth=2):
         if board.is_checkmate():
             board.pop()
             return move
-        score = evaluate_board(board)
+        score = minimax(board, depth - 1, -math.inf, math.inf, board.turn == chess.WHITE)
         board.pop()
         scored_moves.append((score, move))
 
