@@ -5,7 +5,7 @@ from models import Game, GameMove, db
 from datetime import datetime
 
 from ai import choose_ai_move, material_score, evaluate_board
-from helpers import build_full_state, explain_illegal_move, finalize_game, finalize_game_if_over, game_over_response_from_session, get_active_game_or_abort, get_ai_record, get_game_state, get_or_create_player_uuid, init_game, log_game_action, save_game_state, execute_move, touch_game
+from helpers import build_full_state, explain_illegal_move, finalize_game, finalize_game_if_over, get_active_game_or_abort, get_ai_record, get_game_state, get_or_create_player_uuid, init_game, log_game_action, save_game_state, execute_move, state_response, touch_game
 
 import logging
 logger = logging.getLogger(__name__)
@@ -92,18 +92,35 @@ def register_routes(app):
 
         if game and not is_active:
             logger.info("[%s] Move rejected: game already ended", move_id)
-            return game_over_response_from_session(extra={
-                "message": "This game has already ended.",
-                "result": game.result,
-                "termination_reason": game.termination_reason,
-            })
- 
+            return state_response(
+                status="game_over",
+                from_session=True,
+                extra={
+                    "message": "This game has already ended.",
+                    "result": game.result,
+                    "termination_reason": game.termination_reason,
+                },
+                code=400
+            )
+
         logger.debug("[%s] Session keys: %s", move_id, list(session.keys()))
         logger.debug("[%s] Session FEN: %s", move_id, session.get("fen"))
         logger.debug("[%s] Board FEN: %s", move_id, board.fen())
         logger.debug("[%s] Turn: %s", move_id, "white" if board.turn else "black")
 
         data = request.get_json()
+        if data is None:
+            logger.warning("[%s] Request has no JSON body", move_id)
+            return state_response(
+                status="illegal",
+                board=board,
+                move_history=move_history,
+                captured_pieces=captured_pieces,
+                special_moves=special_moves,
+                extra={"message": "Invalid move format"},
+                code=400
+            )
+        
         from_sq = data.get("from")
         to_sq = data.get("to")
         promotion = data.get("promotion")
@@ -136,12 +153,15 @@ def register_routes(app):
                     [m.uci() for m in list(board.legal_moves)[:10]],
                 )
 
-                return jsonify({
-                    "status": "illegal",
-                    "message": reason,
-                    "material": material_score(board),
-                    "evaluation": evaluate_board(board)
-                })
+                return state_response(
+                    status="illegal",
+                    board=board,
+                    move_history=move_history,
+                    captured_pieces=captured_pieces,
+                    special_moves=special_moves,
+                    extra={"message": reason},
+                    code=400
+                )
             
             logger.info("[%s] Legal move accepted", move_id)
             
@@ -190,49 +210,42 @@ def register_routes(app):
 
             logger.info("[%s] Move complete | material=%s | eval=%s", move_id, material, evaluation)
 
-            response_data = {
-                "status": "ok",
-                "special_moves": special_moves,
-                "fen": board.fen(),
-                "turn": "white" if board.turn == chess.WHITE else "black",
-                "check": board.is_check(),
-                "checkmate": board.is_checkmate(),
-                "stalemate": board.is_stalemate(),
-                "fifty_moves": board.is_fifty_moves(),
-                "can_claim_repetition": board.can_claim_threefold_repetition(),
-                "fivefold_repetition": board.is_fivefold_repetition(),
-                "insufficient_material": board.is_insufficient_material(),
-                "game_over": board.is_checkmate() or board.is_stalemate() or board.is_insufficient_material() or board.is_fifty_moves() or board.is_seventyfive_moves() or board.is_fivefold_repetition(), 
-                "move_history": move_history,
-                "captured_pieces": captured_pieces,
-                "material": material,
-                "evaluation": evaluation
-            }
+            return state_response(
+                status="ok",
+                board=board,
+                move_history=move_history,
+                captured_pieces=captured_pieces,
+                special_moves=special_moves,
+                extra={
+                    "material": material_score(board),
+                    "evaluation": evaluate_board(board),
+                }
+            )
 
-            return jsonify(response_data)
+        except (chess.InvalidMoveError, ValueError) as e:
+            logger.warning("[%s] Invalid move format | error=%s", move_id, str(e))
 
+            return state_response(
+                status="illegal",
+                board=board,
+                move_history=move_history,
+                captured_pieces=captured_pieces,
+                special_moves=special_moves,
+                extra={"message": "Invalid move format"},
+                code=400
+            )
         except Exception as e:
             logger.exception("[%s] Exception while processing move", move_id)
 
-            return jsonify({
-                "status": "illegal", 
-                "message": str(e), 
-                "material": material_score(board),
-                "evaluation": evaluate_board(board),
-                "fen": board.fen(),
-                "turn": "white" if board.turn == chess.WHITE else "black",
-                "check": board.is_check(),
-                "checkmate": board.is_checkmate(),
-                "stalemate": board.is_stalemate(),
-                "fifty_moves": board.is_fifty_moves(),
-                "can_claim_repetition": board.can_claim_threefold_repetition(),
-                "fivefold_repetition": board.is_fivefold_repetition(),
-                "insufficient_material": board.is_insufficient_material(),
-                "game_over": board.is_checkmate() or board.is_stalemate() or board.is_insufficient_material() or board.is_fifty_moves() or board.is_seventyfive_moves() or board.is_fivefold_repetition(),
-                "move_history": move_history,
-                "captured_pieces": captured_pieces,
-                "special_moves": special_moves
-            })
+            return state_response(
+                status="error",
+                board=board,
+                move_history=move_history,
+                captured_pieces=captured_pieces,
+                special_moves=special_moves,
+                extra={"message": str(e)},
+                code=500
+            )
 
     # ai move route
     @app.route("/ai-move", methods=["POST"])
@@ -244,21 +257,18 @@ def register_routes(app):
         board, move_history, captured_pieces, special_moves = get_game_state()
 
         if game and game.ended_at is not None:
-            return game_over_response_from_session()
+            return state_response(status="game_over", from_session=True, code=400)
 
         # Only move if game still active
         if board.is_game_over():
-            return jsonify({
-                "status": "ok",
-                "fen": board.fen(),
-                "turn": "white" if board.turn == chess.WHITE else "black",
-                "game_over": True,
-                "move_history": move_history,
-                "captured_pieces": captured_pieces,
-                "special_moves": special_moves,
-                "material": material_score(board),
-                "evaluation": evaluate_board(board)
-            })
+            return state_response(
+                status="ok",
+                board=board,
+                move_history=move_history,
+                captured_pieces=captured_pieces,
+                special_moves=special_moves,
+                extra={"game_over": True}
+            )
 
         logger.info("AI move requested | game_id=%s", session.get("game_id"))
         try:
@@ -297,24 +307,17 @@ def register_routes(app):
 
         save_game_state(board, move_history, captured_pieces, special_moves)
 
-        return jsonify({
-            "status": "ok",
-            "fen": board.fen(),
-            "turn": "white" if board.turn == chess.WHITE else "black",
-            "check": board.is_check(),
-            "checkmate": board.is_checkmate(),
-            "stalemate": board.is_stalemate(),
-            "fifty_moves": board.is_fifty_moves(),
-            "can_claim_repetition": board.can_claim_threefold_repetition(),
-            "fivefold_repetition": board.is_fivefold_repetition(),
-            "insufficient_material": board.is_insufficient_material(),
-            "game_over": board.is_checkmate() or board.is_stalemate() or board.is_insufficient_material() or board.is_fifty_moves() or board.is_seventyfive_moves() or board.is_fivefold_repetition(),
-            "move_history": move_history,
-            "captured_pieces": captured_pieces,
-            "special_moves": special_moves,
-            "material": material_score(board),
-            "evaluation": evaluate_board(board)
-        })
+        return state_response(
+            status="ok",
+            board=board,
+            move_history=move_history,
+            captured_pieces=captured_pieces,
+            special_moves=special_moves,
+            extra={
+                "material": material_score(board),
+                "evaluation": evaluate_board(board),
+            }
+        )
 
     # reset route
     @app.route("/reset", methods=["POST"])
@@ -333,23 +336,14 @@ def register_routes(app):
         logger.debug("Session cleared and new game initialized")
         init_game()
 
-        return jsonify({
-            "status": "ok",
-            "special_moves": [],
-            "fen": chess.STARTING_FEN,
-            "turn": "white",
-            "check": False,
-            "checkmate": False,
-            "stalemate": False,
-            "fifty_moves": False,
-            "can_claim_repetition": False,
-            "insufficient_material": False,
-            "game_over": False,
-            "move_history": [],
-            "captured_pieces": {'white': [], 'black': []},
-            "material": 0,
-            "evaluation": 0
-        })
+        board = chess.Board()
+        return state_response(
+            status="ok",
+            board=board,
+            move_history=[],
+            captured_pieces={'white': [], 'black': []},
+            special_moves=[]
+        )
     
     # resign route
     @app.route("/resign", methods=["POST"])
@@ -357,12 +351,22 @@ def register_routes(app):
         game_id = session.get("game_id")
         if not game_id:
             logger.warning("Resign attempt without active game")
-            return jsonify({"status": "error", "message": "No active game"}), 400
+            return state_response(
+                status="error",
+                from_session=True,
+                extra={"message": "No active game"},
+                code=400
+            )
 
         game = db.session.get(Game, game_id)
         if not game or game.ended_at:
             logger.warning("Resign attempt on ended game | game_id=%s", game_id)
-            return jsonify({"status": "error", "message": "Game already ended"}), 400
+            return state_response(
+                status="error",
+                from_session=True,
+                extra={"message": "Game already ended"},
+                code=400
+            )
 
         board, move_history, captured_pieces, special_moves = get_game_state()
 
@@ -371,7 +375,13 @@ def register_routes(app):
 
         if resigning_color not in ("white", "black"):
             logger.warning("Resign attempt with invalid color | color=%s | game_id=%s", resigning_color, game_id)
-            return jsonify({"status": "error", "message": "Invalid color"}), 400
+            return state_response(
+                status="error",
+                from_session=True,
+                extra={"message": "Invalid color"},
+                code=400
+            )
+
 
         winner = "black" if resigning_color == "white" else "white"
         result = "1-0" if winner == "white" else "0-1"
@@ -393,23 +403,20 @@ def register_routes(app):
         session.pop("captured_pieces", None)
         session.pop("special_moves", None)
 
-        state = build_full_state(
-            board,
-            move_history,
-            captured_pieces,
-            special_moves
+        return state_response(
+            status="ok",
+            board=board,
+            move_history=move_history,
+            captured_pieces=captured_pieces,
+            special_moves=special_moves,
+            extra={
+                "game_over": True,
+                "result": result,
+                "winner": winner,
+                "termination_reason": "resignation"
+            }
         )
 
-        state.update({
-            "status": "ok",
-            "game_over": True,
-            "result": result,
-            "winner": winner,
-            "termination_reason": "resignation"
-        })
-
-        return jsonify(state)
-    
     # 50-move rule draw claim
     @app.route("/claim-draw/50-move", methods=["POST"])
     def claim_50_move_draw():
@@ -419,11 +426,11 @@ def register_routes(app):
 
         if not game or game.ended_at:
             logger.warning("50-move draw claim on ended game | game_id=%s", game_id)
-            return game_over_response_from_session()
+            return state_response(status="game_over", from_session=True)
 
         if not board.is_fifty_moves():
             logger.debug("50-move draw claim invalid | game_id=%s | halfmove_clock=%s", game_id, board.halfmove_clock)
-            return jsonify({"status": "invalid", "reason": "not_claimable"})
+            return state_response(status="invalid", from_session=True, extra={"reason": "not_claimable"}, code=400)
         
         log_game_action(
             game,
@@ -435,24 +442,20 @@ def register_routes(app):
         if game:
             touch_game(game)
         logger.info("Draw claimed by 50-move rule | game_id=%s", game_id)
-
-
-        state = build_full_state(
-            board,
-            move_history,
-            captured_pieces,
-            special_moves
+    
+        return state_response(
+            status="ok",
+            board=board,
+            move_history=move_history,
+            captured_pieces=captured_pieces,
+            special_moves=special_moves,
+            extra={
+                "game_over": True,
+                "result": "1/2-1/2",
+                "termination_reason": "draw_50_move_rule"
+            }
         )
 
-        state.update({
-            "status": "ok",
-            "game_over": True,
-            "result": "1/2-1/2",
-            "termination_reason": "draw_50_move_rule"
-        })
-
-        return jsonify(state)
-  
     # claim threefold repetition draw
     @app.route("/claim-draw/repetition", methods=["POST"])
     def claim_repetition_draw():
@@ -462,11 +465,11 @@ def register_routes(app):
 
         if not game or game.ended_at:
             logger.warning("Repetition draw claim on ended game | game_id=%s", game_id)
-            return game_over_response_from_session()
+            return state_response(status="game_over", from_session=True)
 
         if not board.can_claim_threefold_repetition():
             logger.debug("Repetition draw claim invalid | game_id=%s", game_id)
-            return jsonify({"status": "invalid", "reason": "not_claimable"})
+            return state_response(status="invalid", from_session=True, extra={"reason": "not_claimable"}, code=400)
         
         log_game_action(
             game,
@@ -478,21 +481,19 @@ def register_routes(app):
         if game:
             touch_game(game)
         logger.info("Draw claimed by threefold repetition | game_id=%s", game_id)
-        state = build_full_state(
-            board,
-            move_history,
-            captured_pieces,
-            special_moves
+
+        return state_response(
+            status="ok",
+            board=board,
+            move_history=move_history,
+            captured_pieces=captured_pieces,
+            special_moves=special_moves,
+            extra={
+                "game_over": True,
+                "result": "1/2-1/2",
+                "termination_reason": "draw_threefold_repetition"
+            }
         )
-
-        state.update({
-            "status": "ok",
-            "game_over": True,
-            "result": "1/2-1/2",
-            "termination_reason": "draw_threefold_repetition"
-        })
-
-        return jsonify(state)
     
     # draw agreement route
     @app.route("/draw-agreement", methods=["POST"])
@@ -503,7 +504,7 @@ def register_routes(app):
 
         if not game or game.ended_at:
             logger.warning("Draw agreement on ended game | game_id=%s", game_id)
-            return game_over_response_from_session()
+            return state_response(status="game_over", from_session=True)
         
         log_game_action(
             game,
@@ -515,21 +516,19 @@ def register_routes(app):
         if game:
             touch_game(game)
         logger.info("Draw agreed by both players | game_id=%s", game_id)
-        state = build_full_state(
-            board,
-            move_history,
-            captured_pieces,
-            special_moves
+    
+        return state_response(
+            status="ok",
+            board=board,
+            move_history=move_history,
+            captured_pieces=captured_pieces,
+            special_moves=special_moves,
+            extra={
+                "game_over": True,
+                "result": "1/2-1/2",
+                "termination_reason": "draw_by_agreement"
+            }
         )
-
-        state.update({
-            "status": "ok",
-            "game_over": True,
-            "result": "1/2-1/2",
-            "termination_reason": "draw_by_agreement"
-        })
-
-        return jsonify(state)
     
     ##### route to get AI record ######
     @app.route("/stats/ai-record")
@@ -571,24 +570,16 @@ def register_routes(app):
             logger.error("[TEST] Invalid FEN provided | fen=%s | error=%s", fen, str(e))
             return jsonify({"error": f"Invalid FEN: {str(e)}"}), 400
         
-        # Create board without castling rights to preserve empty squares
-        fen_parts = fen.split()
-        castling = fen_parts[2]
-        fen_no_castling = fen.replace(castling, '-')
-        board = chess.Board(fen_no_castling)
-        
-        # Set castling rights
-        if 'K' in castling:
-            board.castling_rights |= chess.BB_H1
-        if 'Q' in castling:
-            board.castling_rights |= chess.BB_A1
-        if 'k' in castling:
-            board.castling_rights |= chess.BB_H8
-        if 'q' in castling:
-            board.castling_rights |= chess.BB_A8
+        # Use the provided FEN directly to preserve castling and en-passant
+        # information exactly as the test supplied it. Creating a board from
+        # the canonical FEN is more reliable than attempting to set
+        # castling rights manually via bitboards.
+        board = chess.Board(fen)
         
         # Set session state
-        session['fen'] = board.fen()
+        # Store the exact FEN supplied by tests so session reflects the
+        # intended position (including castling rights and ep square).
+        session['fen'] = fen
         session['move_history'] = data.get('move_history', [])
         session['captured_pieces'] = data.get('captured_pieces', {'white': [], 'black': []})
         session['special_moves'] = data.get('special_moves', [])

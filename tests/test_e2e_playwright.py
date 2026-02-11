@@ -365,7 +365,10 @@ def test_mobile_viewport(page: Page, live_server):
 
 def test_pawn_promotion_modal_appears_with_setup(page: Page, live_server):
     """Test that promotion modal appears when pawn reaches 8th rank"""
+    # 🔑 CRITICAL: Clear cookies BEFORE page.goto() to ensure fresh session
+    page.context.clear_cookies()
     page.goto(live_server)
+    page.wait_for_load_state("networkidle")
     
     # Set up position: white pawn on a7, can promote on a8
     promotion_fen = "1rbqkbnr/Ppppppp1/8/8/8/8/1PPPPPPP/RNBQKBNR w KQkq - 0 1"
@@ -373,6 +376,7 @@ def test_pawn_promotion_modal_appears_with_setup(page: Page, live_server):
     setup_board_position(
         page,
         promotion_fen,
+        live_server=live_server,
         move_history=["a4", "h6", "a5", "h5", "a6", "h4", "axb7"],
         captured_pieces={"white": ["p"], "black": []},
         special_moves=[]
@@ -463,13 +467,17 @@ def test_pawn_promotion_queen_selection_with_setup(page: Page, live_server):
 
 def test_pawn_promotion_cancel_button_with_setup(page: Page, live_server):
     """Test that cancel button in promotion dialog works correctly"""
+    # 🔑 CRITICAL: Clear cookies BEFORE page.goto() to ensure fresh session
+    page.context.clear_cookies()
     page.goto(live_server)
+    page.wait_for_load_state("networkidle")
     
     promotion_fen = "r1bqkbnr/1Pppppp1/8/8/8/8/1PPPPPPP/RNBQKBNR w KQkq - 0 1"
     
     setup_board_position(
         page,
         promotion_fen,
+        live_server=live_server,
         move_history=[],
         captured_pieces={"white": ["p"], "black": []},
         special_moves=[]
@@ -558,7 +566,10 @@ def test_checkmate_displays_game_over(page: Page, live_server):
 
 def test_check_status_displays_with_setup(page: Page, live_server):
     """Test that check status displays correctly - uses exact board setup"""
+    # 🔑 CRITICAL: Clear cookies BEFORE page.goto() to ensure fresh session
+    page.context.clear_cookies()
     page.goto(live_server)
+    page.wait_for_load_state("networkidle")
     
     # Set up position where white king is in check
     # Black queen on e4 gives check to white king on e1 (no pawns blocking)
@@ -568,6 +579,7 @@ def test_check_status_displays_with_setup(page: Page, live_server):
     setup_board_position(
         page, 
         check_fen,
+        live_server=live_server,
         move_history=[],  # No move history - just use FEN directly
         special_moves=[]
     )
@@ -588,7 +600,10 @@ def test_check_status_displays_with_setup(page: Page, live_server):
 @pytest.mark.skip(reason="Test setup_board_position session persistence issue - requires Flask-Session debugging")
 def test_en_passant_capture_ui_with_exact_setup(page: Page, live_server):
     """Test en passant with exact board setup"""
+    # 🔑 CRITICAL: Clear cookies BEFORE page.goto() to ensure fresh session
+    page.context.clear_cookies()
     page.goto(live_server)
+    page.wait_for_load_state("networkidle")
     
     # Set up position: white pawn on e5, black pawn on f5
     # Use minimal move history to match FEN
@@ -597,6 +612,7 @@ def test_en_passant_capture_ui_with_exact_setup(page: Page, live_server):
     setup_board_position(
         page,
         en_passant_fen,
+        live_server=live_server,
         move_history=[],  # Empty - just test the position, not move history
         captured_pieces={"white": [], "black": []},
         special_moves=[]
@@ -778,7 +794,10 @@ def test_snapback_piece_to_original_square(page: Page, live_server):
 
 def test_castling_kingside_with_exact_setup(page: Page, live_server):
     """Test kingside castling with controlled board position"""
+    # 🔑 CRITICAL: Clear cookies BEFORE page.goto() to ensure fresh session
+    page.context.clear_cookies()
     page.goto(live_server)
+    page.wait_for_load_state("networkidle")
     
     # Position: White can castle kingside (e1, g1, h1 clear)
     castling_fen = "rnbqkbnr/pppppppp/8/8/2B5/5N2/PPPPPPPP/RNBQK2R w KQkq - 0 1"
@@ -786,6 +805,7 @@ def test_castling_kingside_with_exact_setup(page: Page, live_server):
     setup_board_position(
         page,
         castling_fen,
+        live_server=live_server,
         move_history=[],
         captured_pieces={"white": [], "black": []},
         special_moves=[]
@@ -830,7 +850,10 @@ def test_castling_kingside_with_exact_setup(page: Page, live_server):
 @pytest.mark.skip(reason="Test setup_board_position session persistence issue - requires Flask-Session debugging")
 def test_checkmate_fool_mate_with_setup(page: Page, live_server):
     """Test checkmate detection with simple checkmate position"""
+    # 🔑 CRITICAL: Clear cookies BEFORE page.goto() to ensure fresh session
+    page.context.clear_cookies()
     page.goto(live_server)
+    page.wait_for_load_state("networkidle")
     
     # Simple checkmate position: black queen checkmates white king
     # King on h8 has no escape, queen on h7 gives check
@@ -839,6 +862,7 @@ def test_checkmate_fool_mate_with_setup(page: Page, live_server):
     setup_board_position(
         page,
         checkmate_fen,
+        live_server=live_server,
         move_history=[],
         captured_pieces={"white": [], "black": []},
         special_moves=[]
@@ -948,7 +972,10 @@ def test_material_updates_after_capture(page: Page, live_server):
 
 def test_material_shows_white_advantage(page: Page, live_server):
     """Test that white material advantage displays correctly"""
+    # 🔑 CRITICAL: Clear cookies BEFORE page.goto() to ensure fresh session
+    page.context.clear_cookies()
     page.goto(live_server)
+    page.wait_for_load_state("networkidle")
     
     # Set up position where white is up material
     # White up a pawn
@@ -957,6 +984,7 @@ def test_material_shows_white_advantage(page: Page, live_server):
     setup_board_position(
         page,
         fen_white_up,
+        live_server=live_server,
         move_history=[],
         captured_pieces={"white": ["p"], "black": []},
         special_moves=[]
@@ -964,19 +992,31 @@ def test_material_shows_white_advantage(page: Page, live_server):
     
     # Wait for board to fully load and material to be calculated
     page.wait_for_load_state("networkidle")
-    page.wait_for_timeout(500)
+    # 🔑 Extra wait for material update function to execute and DOM to reflect
+    page.wait_for_load_state("domcontentloaded")
+    page.wait_for_timeout(3000)  # Wait for updateMaterialAdvantage() to execute
+    
+    # 🔍 DEBUG: Check what the page actually has for material
+    config_material = page.evaluate("window.CHESS_CONFIG?.material")
+    config_fen = page.evaluate("window.CHESS_CONFIG?.fen")
+    print(f"[DEBUG material_white] window.CHESS_CONFIG.material = {config_material}")
+    print(f"[DEBUG material_white] window.CHESS_CONFIG.fen = {config_fen}")
     
     material_elem = page.locator("#material-advantage")
+    material_text = material_elem.text_content()
+    print(f"[DEBUG material_white] #material-advantage text = {material_text}")
     
     # Should show white advantage
-    material_text = material_elem.text_content()
     assert "White" in material_text or "+" in material_text, \
         f"Should show white advantage, got: {material_text}"
 
 
 def test_material_shows_black_advantage(page: Page, live_server):
     """Test that black material advantage displays correctly"""
+    # 🔑 CRITICAL: Clear cookies BEFORE page.goto() to ensure fresh session
+    page.context.clear_cookies()
     page.goto(live_server)
+    page.wait_for_load_state("networkidle")
     
     # Set up position where black is up material
     # Black up a pawn
@@ -985,6 +1025,7 @@ def test_material_shows_black_advantage(page: Page, live_server):
     setup_board_position(
         page,
         fen_black_up,
+        live_server=live_server,
         move_history=[],
         captured_pieces={"white": [], "black": ["P"]},
         special_moves=[]
@@ -1028,7 +1069,10 @@ def test_evaluation_updates_after_move(page: Page, live_server):
 
 def test_evaluation_shows_winning_for_checkmate(page: Page, live_server):
     """Test that evaluation shows extreme value for checkmate"""
+    # 🔑 CRITICAL: Clear cookies BEFORE page.goto() to ensure fresh session
+    page.context.clear_cookies()
     page.goto(live_server)
+    page.wait_for_load_state("networkidle")
     
     # Set up back rank mate: Ra8#
     checkmate_fen = "6k1/5ppp/8/8/8/8/5PPP/R6K b - - 0 1"
@@ -1036,6 +1080,7 @@ def test_evaluation_shows_winning_for_checkmate(page: Page, live_server):
     setup_board_position(
         page,
         checkmate_fen,
+        live_server=live_server,
         move_history=["Ra8#"],
         captured_pieces={"white": [], "black": []},
         special_moves=[]
@@ -1168,7 +1213,10 @@ def test_reset_clears_material_and_evaluation(page: Page, live_server):
 
 def test_evaluation_description_accuracy(page: Page, live_server):
     """Test that evaluation descriptions match score ranges"""
+    # 🔑 CRITICAL: Clear cookies BEFORE page.goto() to ensure fresh session
+    page.context.clear_cookies()
     page.goto(live_server)
+    page.wait_for_load_state("networkidle")
     
     # Test various positions with known evaluations
     test_cases = [
@@ -1182,6 +1230,7 @@ def test_evaluation_description_accuracy(page: Page, live_server):
         setup_board_position(
             page,
             fen,
+            live_server=live_server,
             move_history=[],
             captured_pieces={"white": [], "black": []},
             special_moves=[]
@@ -1203,7 +1252,10 @@ def test_evaluation_description_accuracy(page: Page, live_server):
 
 def test_material_advantage_numerical_display(page: Page, live_server):
     """Test that material advantage shows numerical values (e.g., 'White +1.0')"""
+    # 🔑 CRITICAL: Clear cookies BEFORE page.goto() to ensure fresh session
+    page.context.clear_cookies()
     page.goto(live_server)
+    page.wait_for_load_state("networkidle")
     
     # Set up position: white up a pawn (100 centipawns = 1.0 pawns)
     fen_white_up_pawn = "rnbqkbnr/ppppppp1/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
@@ -1211,6 +1263,7 @@ def test_material_advantage_numerical_display(page: Page, live_server):
     setup_board_position(
         page,
         fen_white_up_pawn,
+        live_server=live_server,
         move_history=[],
         captured_pieces={"white": ["p"], "black": []},
         special_moves=[]
@@ -1238,6 +1291,7 @@ def test_material_advantage_numerical_display(page: Page, live_server):
         setup_board_position(
             page,
             fen_white_up_pawn,
+            live_server=live_server,
             move_history=[],
             captured_pieces={"white": ["p"], "black": []},
             special_moves=[]

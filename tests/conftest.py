@@ -147,6 +147,35 @@ def seed_rng():
     # No cleanup needed; next test will set seed again
 
 
-# Note: client fixtures are defined in individual test files
+# 🔑 CRITICAL: Clear Browser Cookies Before Each E2E Test
+# Even though cleanup_flask_session deletes session files, the browser context
+# may retain old session cookies from previous tests. When a new test calls
+# page.goto(live_server), it uses the old cookie and loads the old session!
+# This fixture ensures every test starts with a clean browser state.
+@pytest.fixture(autouse=True)
+def clear_page_cookies(request):
+    """
+    Automatically clear browser cookies before each E2E Playwright test.
+    
+    Without this, tests in the E2E suite fail because:
+    1. Test A completes, browser context retains session cookie
+    2. Test B starts, calls page.goto(live_server)
+    3. Page.goto uses old cookie, loads Test A's session
+    4. setup_board_position tries to set Test B's position but fails
+       because the page already loaded Test A's data
+    5. Test B fails with wrong FEN/material
+    
+    Solution: Clear all cookies before each test runs, so every test
+    gets a truly fresh browser state.
+    """
+    # Only clear for E2E tests that use the 'page' fixture
+    if 'page' in request.fixturenames:
+        # The page fixture is provided by pytest-playwright
+        # We access it by getting the fixture value
+        page = request.getfixturevalue('page')
+        page.context.clear_cookies()
+        print(f"[FIXTURE] Cleared cookies before test: {request.node.name}")
+    
+    yield
 # (test_routes_api.py and test_ai_and_endgames.py)
 # This avoids fixture conflicts and allows per-file AI_ENABLED configuration

@@ -88,6 +88,7 @@ $(document).ready(function () {
     updateSpecialMove(config.special_moves);
     updateMaterialAdvantage(config.material);
     updatePositionEvaluation(config.evaluation);
+    updateStatus(config);  // 🔑 Initialize status display with check/turn/game_over state
 
     // 🔑 INITIALIZE BUTTON VISIBILITY - Hide New Game, show Resign/Draw on page load
     // Only hide reset if game is active (not game over)
@@ -126,11 +127,43 @@ $(document).ready(function () {
                 }
             },
 
-            error: function () {
+            error: function (xhr) {
                 moveInFlight = false;
                 rollbackPosition();
                 board.draggable = true;
-                updateErrorMessage("Server error");
+                
+                // Try to parse JSON response from server
+                try {
+                    const response = JSON.parse(xhr.responseText);
+                    if (response.message) {
+                        updateErrorMessage(response.message);
+                    } else {
+                        updateErrorMessage("Server error");
+                    }
+                } catch (e) {
+                    updateErrorMessage("Server error");
+                }
+            },
+            
+            statusCode: {
+                400: function (response) {
+                    moveInFlight = false;
+                    
+                    if (response.status === "ok") {
+                        updateFromState(response);
+                        maybeTriggerAiTurn(response);
+                    } else {
+                        rollbackPosition();
+                        updateErrorMessage(response.message || "Illegal move");
+                        board.draggable = true;
+                    }
+                },
+                500: function (response) {
+                    moveInFlight = false;
+                    rollbackPosition();
+                    board.draggable = true;
+                    updateErrorMessage(response.message || "Server error");
+                }
             }
         });
     }

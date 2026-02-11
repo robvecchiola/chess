@@ -153,6 +153,27 @@ def execute_move(board, move, move_history, captured_pieces, special_moves, is_a
         special_moves.append(prefixed_special_move)
         logger.debug("Special move appended | prefixed=%s", prefixed_special_move)
 
+    # Fallback detection: in some edge cases the Move object may not have
+    # an explicit `promotion` attribute (e.g., when SAN/uci parsing differs),
+    # but the resulting board square contains a promoted piece. Detect that
+    # here and ensure we record the promotion as a special move.
+    if not special_move:
+        try:
+            # If the moving piece was a pawn and landed on the last rank,
+            # and the destination now contains a non-pawn piece, treat as promotion.
+            if ('from_piece' in locals()) and from_piece and from_piece.piece_type == chess.PAWN:
+                if chess.square_rank(move.to_square) in (0, 7):
+                    promoted = board.piece_at(move.to_square)
+                    if promoted and promoted.piece_type != chess.PAWN:
+                        promoted_symbol = chess.piece_symbol(promoted.piece_type).upper()
+                        special_move = f"Promotion to {promoted_symbol}"
+                        prefixed_special_move = f"{moving_color}: {special_move}"
+                        special_moves.append(prefixed_special_move)
+                        logger.debug("Fallback promotion appended | prefixed=%s", prefixed_special_move)
+        except Exception:
+            # Don't let fallback detection break the move execution
+            logger.debug("Promotion fallback detection failed, continuing")
+
 
 ## illegal moves helper
 
@@ -475,13 +496,43 @@ def build_full_state(board, move_history, captured_pieces, special_moves):
         "game_over": board.is_game_over()
     }
 
-#something for somethin
-def game_over_response_from_session(status="game_over", extra=None):
-    board, move_history, captured_pieces, special_moves = get_game_state()
-    state = build_full_state(board, move_history, captured_pieces, special_moves)
-    state.update({"status": status, "game_over": True})
+# full state generic fucntion for all responses
+def state_response(
+    status="ok",
+    board=None,
+    move_history=None,
+    captured_pieces=None,
+    special_moves=None,
+    *,
+    extra=None,
+    code=200,
+    from_session=False
+):
+    """
+    Universal response helper.
+    
+    - Always returns full game state
+    - Supports all statuses: ok, illegal, invalid, error, game_over
+    - Can pull state from session when needed
+    """
+
+    if from_session:
+        board, move_history, captured_pieces, special_moves = get_game_state()
+
+    state = build_full_state(
+        board,
+        move_history,
+        captured_pieces,
+        special_moves
+    )
+
+    state["status"] = status
+
+    # Force game_over flag when appropriate
+    if status == "game_over":
+        state["game_over"] = True
 
     if extra:
         state.update(extra)
-        
-    return jsonify(state), 400
+
+    return jsonify(state), code

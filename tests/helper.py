@@ -2,25 +2,23 @@ from flask import json
 from playwright.sync_api import Page
 from pathlib import Path
 import os
+import time
 
 def setup_board_position(page: Page, fen: str, move_history=None, 
-                        captured_pieces=None, special_moves=None):
+                        captured_pieces=None, special_moves=None, live_server: str = "http://localhost:5000"):
     """
     Helper to set exact board position using test endpoint.
+    CRITICAL: Tests that use this MUST clear cookies BEFORE page.goto()!
+    
+    Recommended pattern:
+        page.context.clear_cookies()  # STEP 1: Clear old cookies
+        page.goto(live_server)        # STEP 2: Load page with clean session
+        setup_board_position(page, fen, ...)  # STEP 3: Override session state
     
     Uses browser's fetch with credentials to ensure Flask-Session cookie
     is sent and maintained across the /test/set_position call.
-    
-    🔑 CRITICAL FOR TEST ISOLATION:
-    - Clears browser cookies
-    - Clears Flask-Session files on disk
-    - Ensures completely fresh session state
     """
-    # 🔑 STEP 1: Clear browser cookies to remove session ID from client
-    page.context.clear_cookies()
-    
-    # 🔑 STEP 2: Force-delete Flask-Session files to ensure fresh session
-    # This prevents stale session data from previous tests
+    # 🔑 Delete Flask-Session files to ensure fresh session
     session_dir = Path("flask_session")
     if session_dir.exists():
         for session_file in session_dir.glob("*"):
@@ -38,7 +36,6 @@ def setup_board_position(page: Page, fen: str, move_history=None,
     }
     
     # Use browser's fetch with credentials: 'include' to send session cookies
-    # This is critical - without credentials, fetch won't send the session cookie!
     result = page.evaluate(f"""
         async () => {{
             const response = await fetch('/test/set_position', {{
@@ -61,18 +58,105 @@ def setup_board_position(page: Page, fen: str, move_history=None,
     print(f"[SETUP] /test/set_position returned: {result}")
     assert result.get('status') == 'ok', f"Failed to set position: {result}"
     
-    # Extra delay to ensure session is written to disk AND browser receives Set-Cookie
-    # This is critical in full suite runs where server might be under load
-    page.wait_for_timeout(5000)  # Increased from 3000 for robustness
+    # Extra delay to ensure session is written to disk
+    page.wait_for_timeout(2000)
     
-    # Navigate to the page (instead of reload) to force a fresh GET with the session cookie
-    # This ensures Flask loads the updated session from disk
-    print(f"[SETUP] Navigating to / to load session with FEN: {fen}")
-    page.goto(page.url.split('?')[0])  # Navigate to /, stripping any query params
-    page.wait_for_load_state('networkidle')
+    # 🔑 CRITICAL: Update the window.CHESS_CONFIG in-place WITHOUT navigating the page
+    # This avoids creating a second session that would override our /test/set_position changes
+    # We just update the JavaScript variables that chessboard-init.js uses
     
-    # Wait for board to stabilize after navigation
-    page.wait_for_timeout(2000)  # Increased from 1000 for full suite runs
+    print(f"[SETUP] Updating page state from /test/set_position result")
+    
+    # Update the window.CHESS_CONFIG object with the result from /test/set_position
+    # This makes chessboard-init.js see the updated state without page reload
+    update_script = f"""
+    // Update window.CHESS_CONFIG with the new state from /test/set_position
+    window.CHESS_CONFIG = window.CHESS_CONFIG || {{}};
+    window.CHESS_CONFIG.fen = {json.dumps(result['fen'])};
+    window.CHESS_CONFIG.move_history = {json.dumps(result['move_history'])};
+    window.CHESS_CONFIG.captured_pieces = {json.dumps(result['captured_pieces'])};
+    window.CHESS_CONFIG.special_moves = {json.dumps(result['special_moves'])};
+    window.CHESS_CONFIG.material = {result['material']};
+    window.CHESS_CONFIG.evaluation = {result['evaluation']};
+    window.CHESS_CONFIG.turn = {json.dumps(result['turn'])};
+    window.CHESS_CONFIG.check = {json.dumps(result['check'])};
+    window.CHESS_CONFIG.checkmate = {json.dumps(result['checkmate'])};
+    window.CHESS_CONFIG.stalemate = {json.dumps(result['stalemate'])};
+    window.CHESS_CONFIG.game_over = {json.dumps(result['game_over'])};
+    
+    // Now manually call the update functions that chessboard-init.js would call on page load
+    // First, reinit the chessboard with the new FEN
+    if (window.board) {{
+        board.position({json.dumps(result['fen'])}, false);  // false = don't animate
+    }}
+    
+    // Update material display - pass the material VALUE not the whole config
+    if (typeof updateMaterialAdvantage === 'function') {{
+        updateMaterialAdvantage(window.CHESS_CONFIG.material);
+    }}
+    
+    // Update evaluation display - pass the evaluation VALUE and use correct function name
+    if (typeof updatePositionEvaluation === 'function') {{
+        updatePositionEvaluation(window.CHESS_CONFIG.evaluation);
+    }}
+    
+    // Update status - pass the full config object
+    if (typeof updateStatus === 'function') {{
+        updateStatus(window.CHESS_CONFIG);
+    }}
+    
+    // Update move history display
+    if (typeof updateMoveHistory === 'function') {{
+        updateMoveHistory(window.CHESS_CONFIG.move_history);
+    }}
+    
+    // Update captured pieces display - use correct function name
+    if (typeof updateCaptured === 'function') {{
+        updateCaptured(window.CHESS_CONFIG.captured_pieces);
+    }}
+    
+    // Update special moves display - use correct function name
+    if (typeof updateSpecialMove === 'function') {{
+        updateSpecialMove(window.CHESS_CONFIG.special_moves);
+    }}
+    
+    true;  // Return value to confirm script executed
+    """
+    
+    try:
+        result_confirm = page.evaluate(update_script)
+        print(f"[SETUP] Page state update successful (result: {result_confirm})")
+    except Exception as e:
+        print(f"[SETUP] ERROR: Could not execute state update script: {e}")
+        raise AssertionError(f"Failed to update page state: {e}")
+    
+    # Wait for any DOM updates to finish
+    page.wait_for_timeout(500)
+    
+    # 🔍 DEBUG: Check what the page has NOW
+    config_fen = page.evaluate("window.CHESS_CONFIG?.fen")
+    config_material = page.evaluate("window.CHESS_CONFIG?.material")
+    print(f"[SETUP] After state update - CHESS_CONFIG.fen = {config_fen}")
+    print(f"[SETUP] After state update - CHESS_CONFIG.material = {config_material}")
+    
+    # 🔑 VERIFY: The state was updated correctly
+    # Note: Castling rights may be modified by the chess engine, so we only check the board position part
+    fen_board_only = fen.split(' ')[0]  # Just the position part, ignore castling/ep/etc
+    config_fen_board_only = config_fen.split(' ')[0] if config_fen else ""
+    
+    if config_fen_board_only != fen_board_only:
+        print(f"[SETUP] ERROR: Page has wrong board position! Expected {fen_board_only}, got {config_fen_board_only}")
+        print(f"[SETUP]        (Complete FEN: expected {fen}, got {config_fen})")
+        raise AssertionError(f"Session not loaded correctly - page has wrong FEN: {config_fen} instead of {fen}")
+    
+    # Verify status element exists and has been updated
+    try:
+        page.wait_for_function(
+            "() => { const el = document.getElementById('game-status'); return el && el.textContent.length > 0; }",
+            timeout=5000
+        )
+    except Exception as e:
+        print(f"[SETUP] Warning: Status element update timeout: {e}")
 
 def get_piece_in_square(page: Page, square: str):
     """

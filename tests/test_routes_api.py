@@ -1375,3 +1375,100 @@ def test_resign_after_game_over(client):
     
     assert data["status"] == "error"
     assert "Game already ended" in data["message"]
+
+# =============================================================================
+# SPECIAL MOVES API TESTS (castling, promotion, en passant)
+# =============================================================================
+
+def test_castling_kingside_returns_special_moves(client):
+    """Test that castling kingside returns 'Castling' in special_moves"""
+    # Setup: Move pieces to allow kingside castling
+    reset_board(client)
+    moves = [
+        ("e2", "e4"), ("e7", "e5"),  # Move e-pawns
+        ("g1", "f3"), ("g8", "f6"),  # Move knights
+        ("f1", "e2"), ("f8", "e7"),  # Move bishops
+    ]
+    for from_sq, to_sq in moves:
+        make_move(client, from_sq, to_sq)
+    
+    # Perform castling kingside
+    response = make_move(client, "e1", "g1")
+    
+    assert response["status"] == "ok", f"Castling should succeed, got: {response}"
+    assert len(response["special_moves"]) > 0, "special_moves should contain castling"
+    assert any("Castling" in move for move in response["special_moves"]), \
+        f"Expected 'Castling' in special_moves, got: {response['special_moves']}"
+
+def test_castling_queenside_returns_special_moves(client):
+    """Test that castling queenside returns 'Castling' in special_moves"""
+    # Setup: Move pieces to allow queenside castling
+    reset_board(client)
+    moves = [
+        ("d2", "d4"), ("d7", "d5"),  # Move d-pawns
+        ("b1", "c3"), ("b8", "c6"),  # Move knights
+        ("c1", "f4"), ("c8", "f5"),  # Move bishops
+        ("d1", "d2"), ("d8", "d7"),  # Move queens
+    ]
+    for from_sq, to_sq in moves:
+        make_move(client, from_sq, to_sq)
+    
+    # Perform castling queenside
+    response = make_move(client, "e1", "c1")
+    
+    assert response["status"] == "ok", f"Castling should succeed, got: {response}"
+    assert len(response["special_moves"]) > 0, "special_moves should contain castling"
+    assert any("Castling" in move for move in response["special_moves"]), \
+        f"Expected 'Castling' in special_moves, got: {response['special_moves']}"
+
+def test_pawn_promotion_returns_special_moves(client):
+    """Test that pawn promotion returns 'Promotion to Q' in special_moves"""
+    # Setup: Create a position where white pawn on b7 can promote
+    with client.session_transaction() as sess:
+        sess['fen'] = 'rnbqkbnr/1Pppppp1/8/8/8/8/1PPPPPPP/RNBQKBNR w KQkq - 0 1'
+        sess['move_history'] = []
+        sess['captured_pieces'] = {'white': ['p'], 'black': []}
+        sess['special_moves'] = []
+    
+    # Promote pawn to queen
+    response = make_move(client, "b7", "a8", promotion="q")
+    
+    assert response["status"] == "ok", f"Promotion should succeed, got: {response}"
+    assert len(response["special_moves"]) > 0, "special_moves should contain promotion"
+    assert any("Promotion to Q" in move for move in response["special_moves"]), \
+        f"Expected 'Promotion to Q' in special_moves, got: {response['special_moves']}"
+
+def test_pawn_promotion_to_rook_returns_special_moves(client):
+    """Test that pawn promotion to rook returns 'Promotion to R' in special_moves"""
+    with client.session_transaction() as sess:
+        sess['fen'] = 'rnbqkbnr/1Pppppp1/8/8/8/8/1PPPPPPP/RNBQKBNR w KQkq - 0 1'
+        sess['move_history'] = []
+        sess['captured_pieces'] = {'white': ['p'], 'black': []}
+        sess['special_moves'] = []
+    
+    # Promote pawn to rook
+    response = make_move(client, "b7", "a8", promotion="r")
+    
+    assert response["status"] == "ok", f"Promotion should succeed, got: {response}"
+    assert any("Promotion to R" in move for move in response["special_moves"]), \
+        f"Expected 'Promotion to R' in special_moves, got: {response['special_moves']}"
+
+def test_en_passant_returns_special_moves(client):
+    """Test that en passant capture returns 'En Passant' in special_moves"""
+    reset_board(client)
+    
+    # Move to position where en passant is possible
+    moves = [
+        ("e2", "e4"), ("a7", "a6"),
+        ("e4", "e5"), ("d7", "d5"),  # Black pawn moves 2 squares
+    ]
+    for from_sq, to_sq in moves:
+        make_move(client, from_sq, to_sq)
+    
+    # Capture en passant with white e-pawn
+    response = make_move(client, "e5", "d6")
+    
+    assert response["status"] == "ok", f"En passant should succeed, got: {response}"
+    assert len(response["special_moves"]) > 0, "special_moves should contain en passant"
+    assert any("En Passant" in move for move in response["special_moves"]), \
+        f"Expected 'En Passant' in special_moves, got: {response['special_moves']}"
