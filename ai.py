@@ -49,7 +49,7 @@ def quiescence(board, alpha, beta, depth=0, max_depth=4):
     for move in board.legal_moves:
         if board.is_capture(move) or board.gives_check(move):
             board.push(move)
-            score = -quiescence(board, -beta, -alpha, depth + 1, max_depth)
+            score = quiescence(board, alpha, beta, depth + 1, max_depth)
             board.pop()
             
             if score >= beta:

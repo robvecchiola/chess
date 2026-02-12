@@ -423,6 +423,10 @@ html, body {
         order: 1;
     }
 
+    .left-panel {
+        order: 3;
+    }
+
     .card.move-history-card {
         max-height: none;
     }
