@@ -49,11 +49,15 @@ cd chess
 python -m venv venv
 venv\Scripts\activate  # Windows
 # source venv/bin/activate  # Linux/Mac
+deactivate  # To exit virtual environment
 ```
+rm -rf /home/casualchess/mysite/chess/venv
+
 
 ### 3. Install Dependencies
 ```bash
 pip install -r requirements.txt
+pip install -r requirements-dev.txt
 ```
 
 ## Running the Application
@@ -63,7 +67,6 @@ pip install -r requirements.txt
 flask run
 ```
 Or:
-```bash
 python app.py
 ```
 

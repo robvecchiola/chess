@@ -272,7 +272,7 @@ def register_routes(app):
 
         logger.info("AI move requested | game_id=%s", session.get("game_id"))
         try:
-            ai_move = choose_ai_move(board, depth=2)
+            ai_move = choose_ai_move(board, depth=3)
             if ai_move is None:
                 logger.error("AI error, falling back to random move", exc_info=True)
                 ai_move = random.choice(list(board.legal_moves))
