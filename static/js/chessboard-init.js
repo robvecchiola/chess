@@ -327,6 +327,7 @@ $(document).ready(function () {
 
         document.getElementById("cancel-promotion").onclick = () => {
             dialog.style.display = "none";
+            moveInFlight = false;
             rollbackPosition();
             board.draggable = true;
         };
@@ -519,9 +520,16 @@ $(document).ready(function () {
         // If no square is selected, select this one as source
         if (!selectedSquare) {
             selectedSquare = square;
-            // Highlight selected square (optional - could add CSS class)
+            // Highlight selected square for visual feedback
+            const el = document.querySelector(`[data-square="${square}"]`);
+            if (el) el.style.background = "rgba(37, 99, 235, 0.35)";
             return;
         }
+
+        // Clear highlight
+        document.querySelectorAll("[data-square]").forEach(el => {
+            el.style.background = "";
+        });
 
         // If same square tapped twice, deselect
         if (selectedSquare === square) {
