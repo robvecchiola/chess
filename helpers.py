@@ -466,9 +466,9 @@ def get_ai_record():
         .one()
     )
 
-    wins = rows.wins or 0
-    losses = rows.losses or 0
-    draws = rows.draws or 0
+    wins = int(rows.wins or 0)
+    losses = int(rows.losses or 0)
+    draws = int(rows.draws or 0)
 
     total = wins + losses + draws
     win_rate = round((wins / total) * 100, 1) if total else 0.0
