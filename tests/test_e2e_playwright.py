@@ -304,15 +304,17 @@ def test_ai_responds_with_legal_move(page: Page, live_server):
         initial_history_count = page.locator("#move-history tr").count()
         
         page.locator(f'{from_sq} .piece-417db').drag_to(page.locator(to_sq))
-        page.wait_for_timeout(2000)
         
-        # Verify AI responded (history increased by 1: player + AI move)
+        # Wait for AI response: new row should appear in history (player + AI move = 1 new row)
+        page.locator("#move-history tr").nth(initial_history_count).wait_for(timeout=10000)
+        
+        # Verify AI responded (history increased by 1)
         final_history_count = page.locator("#move-history tr").count()
         assert final_history_count == initial_history_count + 1
         
         # Verify turn is back to white
         status = page.locator("#game-status")
-        expect(status).to_have_text(re.compile("White's turn"))
+        expect(status).to_have_text(re.compile("White's turn"), timeout=10000)
 
 
 # =============================================================================

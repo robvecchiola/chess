@@ -213,3 +213,6 @@ flask db migrate -m "blah"
 ```bash
 flask db upgrade
 ```
+
+used this to create virtual dr in pythonanywhere:
+mkvirtualenv venv --python=python3.11
