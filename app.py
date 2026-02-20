@@ -4,8 +4,8 @@ from flask import Flask
 from flask_session import Session
 from extensions import db
 from flask_migrate import Migrate
-from routes import register_routes
 from logging_config import setup_logging
+from game.routes import game_bp
 
 logger = logging.getLogger(__name__)
 
@@ -58,7 +58,7 @@ def create_app(config_object=None):
     # -------------------------------------------------
     # Routes
     # -------------------------------------------------
-    register_routes(app)
+    app.register_blueprint(game_bp)
 
     return app
 

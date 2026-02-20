@@ -5,7 +5,6 @@ Flask-Migrate==4.1.0
 SQLAlchemy==2.0.46
 alembic==1.18.4
 python-chess==1.999
-chess==1.11.2
 PyMySQL==1.1.2
 python-slugify==8.0.4
 requests==2.32.5
