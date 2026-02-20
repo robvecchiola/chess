@@ -1,0 +1,5 @@
+-r requirements.in
+pytest
+playwright
+pytest-playwright
+pytest-base-url

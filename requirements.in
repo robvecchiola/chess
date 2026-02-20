@@ -1,0 +1,11 @@
+Flask
+Flask-Session
+Flask-SQLAlchemy
+Flask-Migrate
+SQLAlchemy
+alembic
+python-chess
+PyMySQL
+python-slugify
+requests
+cryptography

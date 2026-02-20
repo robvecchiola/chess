@@ -51,7 +51,7 @@ venv\Scripts\activate  # Windows
 # source venv/bin/activate  # Linux/Mac
 deactivate  # To exit virtual environment
 ```
-rm -rf /home/casualchess/mysite/chess/venv
+rm -rf /home/casualchess/.virtualenvs/venv
 
 
 ### 3. Install Dependencies
@@ -216,3 +216,8 @@ flask db upgrade
 
 used this to create virtual dr in pythonanywhere:
 mkvirtualenv venv --python=python3.11
+/home/casualchess/.virtualenvs/venv
+
+manually add libraries to requirements/dev.in then run:
+```bash
+pip-compile requirements-dev.in
