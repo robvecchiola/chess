@@ -40,7 +40,9 @@ def init_game():
     session["fen"] = board.fen()
     session["move_history"] = []
     session["captured_pieces"] = {"white": [], "black": []}
+    # Keep a simple list for backward compatibility and a per-color mapping
     session["special_moves"] = []
+    session["special_moves_by_color"] = {"white": [], "black": []}
     session.modified = True
 
 
@@ -54,6 +56,7 @@ def get_game_state():
     if not isinstance(captured_pieces, dict):
         captured_pieces = {'white': [], 'black': []}
     special_moves = session.get('special_moves', [])
+    special_moves_by_color = session.get('special_moves_by_color', {'white': [], 'black': []})
 
     # Try to create board from FEN, fallback to starting position if invalid
     try:
@@ -73,14 +76,16 @@ def get_game_state():
             logger.debug("Failed to rebuild board from move history | error=%s", e)
             pass
 
-    return board, move_history, captured_pieces, special_moves
+    return board, move_history, captured_pieces, special_moves, special_moves_by_color
 
 
-def save_game_state(board, move_history, captured_pieces, special_moves):
+def save_game_state(board, move_history, captured_pieces, special_moves, special_moves_by_color=None):
     session['fen'] = board.fen()
     session['move_history'] = move_history
     session['captured_pieces'] = captured_pieces
     session['special_moves'] = special_moves
+    if special_moves_by_color is not None:
+        session['special_moves_by_color'] = special_moves_by_color
 
     logger.debug("Game state saved | fen=%s", board.fen())
     session.modified = True
@@ -91,8 +96,8 @@ def execute_move(board, move, move_history, captured_pieces, special_moves, is_a
     Execute a move on the board, updating history, captures, and special moves.
     For AI moves, apply promotion safety net if needed.
     
-    🔑 CRITICAL: Special moves are prefixed with "White:" or "Black:" to allow
-    frontend to correctly separate them in UI (#special-white vs #special-black)
+    🔑 CRITICAL: Special moves are recorded as human-readable labels
+    (e.g. "Castling", "En Passant", "Promotion to Q").
     """
 
     logger.debug(
@@ -151,10 +156,20 @@ def execute_move(board, move, move_history, captured_pieces, special_moves, is_a
     board.push(move)
     move_history.append(move_san)
     if special_move:
-        # 🔑 Prefix with color so frontend can separate white/black moves
-        prefixed_special_move = f"{moving_color}: {special_move}"
-        special_moves.append(prefixed_special_move)
-        logger.debug("Special move appended | prefixed=%s", prefixed_special_move)
+        # Append plain human-readable special move label (tests expect this)
+        special_moves.append(special_move)
+        # Also maintain a per-color mapping in session (white/black)
+        try:
+            sm_by_color = session.get('special_moves_by_color', {'white': [], 'black': []})
+            color_key = 'white' if moving_color.lower().startswith('w') else 'black'
+            sm_by_color.setdefault('white', [])
+            sm_by_color.setdefault('black', [])
+            sm_by_color[color_key].append(special_move)
+            session['special_moves_by_color'] = sm_by_color
+            logger.debug("Special move appended | label=%s | color=%s", special_move, color_key)
+        except Exception:
+            # Session may not be available (non-request contexts); ignore
+            logger.debug("Could not save special_moves_by_color to session (no request context)")
 
     # Fallback detection: in some edge cases the Move object may not have
     # an explicit `promotion` attribute (e.g., when SAN/uci parsing differs),
@@ -170,9 +185,17 @@ def execute_move(board, move, move_history, captured_pieces, special_moves, is_a
                     if promoted and promoted.piece_type != chess.PAWN:
                         promoted_symbol = chess.piece_symbol(promoted.piece_type).upper()
                         special_move = f"Promotion to {promoted_symbol}"
-                        prefixed_special_move = f"{moving_color}: {special_move}"
-                        special_moves.append(prefixed_special_move)
-                        logger.debug("Fallback promotion appended | prefixed=%s", prefixed_special_move)
+                        special_moves.append(special_move)
+                        try:
+                            sm_by_color = session.get('special_moves_by_color', {'white': [], 'black': []})
+                            color_key = 'white' if moving_color.lower().startswith('w') else 'black'
+                            sm_by_color.setdefault('white', [])
+                            sm_by_color.setdefault('black', [])
+                            sm_by_color[color_key].append(special_move)
+                            session['special_moves_by_color'] = sm_by_color
+                            logger.debug("Fallback promotion appended | label=%s | color=%s", special_move, color_key)
+                        except Exception:
+                            logger.debug("Could not save fallback promotion to session (no request context)")
         except Exception:
             # Don't let fallback detection break the move execution
             logger.debug("Promotion fallback detection failed, continuing")
@@ -494,6 +517,7 @@ def build_full_state(board, move_history, captured_pieces, special_moves):
         "move_history": move_history,
         "captured_pieces": captured_pieces,
         "special_moves": special_moves,
+        "special_moves_by_color": session.get('special_moves_by_color', {'white': [], 'black': []}),
         "material": material_score(board),
         "evaluation": evaluate_board(board),
         "game_over": board.is_game_over()
@@ -520,7 +544,7 @@ def state_response(
     """
 
     if from_session:
-        board, move_history, captured_pieces, special_moves = get_game_state()
+        board, move_history, captured_pieces, special_moves, special_moves_by_color = get_game_state()
 
     state = build_full_state(
         board,

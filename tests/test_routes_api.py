@@ -1076,8 +1076,10 @@ def test_en_passant_not_available_on_single_square_pawn_move(client):
     make_move(client, "f6", "f5")  # Now f5, but came from f6 not f7
     # Try en passant - should fail (wasn't 2-square move)
     rv = make_move(client, "e5", "f6")
-    # This will be illegal because f6 is occupied
-    # Better test: after f7-f6, white can't en passant
+    assert rv["status"] == "illegal", f"Expected illegal en passant attempt, got: {rv}"
+    assert not any("En Passant" in move for move in rv.get("special_moves", [])), (
+        f"Unexpected en passant special move recorded: {rv.get('special_moves', [])}"
+    )
 
 def test_move_history_check_notation(client):
     """Test that check is indicated with + in move history"""
@@ -1144,8 +1146,22 @@ def test_captured_pieces_order_preserved(client):
 
 def test_special_moves_cleared_on_reset(client):
     """Verify special_moves is properly cleared on reset"""
-    # Already covered in test_reset_clears_special_moves
-    pass
+    app.config['AI_ENABLED'] = False
+    reset_board(client)
+
+    # Create a special move (castling) first.
+    set_position(client, "r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1")
+    rv = make_move(client, "e1", "g1")
+    assert rv["status"] == "ok"
+    assert any("Castling" in move for move in rv["special_moves"]), (
+        f"Expected castling in special_moves, got: {rv['special_moves']}"
+    )
+
+    # Reset should clear all special move tracking.
+    reset_response = client.post("/reset").get_json()
+    assert reset_response["status"] == "ok"
+    assert reset_response["special_moves"] == []
+    assert reset_response["special_moves_by_color"] == {"white": [], "black": []}
 
 def test_multiple_promotions_tracked_separately(client):
     """Test that multiple promotions are tracked individually"""

@@ -4,7 +4,7 @@ import chess
 import random
 from models import Game, GameMove, db
 from datetime import datetime
-from game.services import process_ai_move, process_player_move
+from game.services import GameService
 from ai import choose_ai_move, material_score, evaluate_board
 from helpers import explain_illegal_move, finalize_game, finalize_game_if_over, get_active_game_or_abort, get_ai_record, get_game_state, get_or_create_player_uuid, init_game, log_game_action, save_game_state, execute_move, state_response, touch_game
 
@@ -40,7 +40,7 @@ def home():
     # Session FEN will be preserved across requests as long as it exists
         
     # Get current board state to pass to template
-    board, move_history, captured_pieces, special_moves = get_game_state()
+    board, move_history, captured_pieces, special_moves, special_moves_by_color = get_game_state()
     initial_position = board.fen()
         
     status = ""
@@ -86,7 +86,7 @@ def home():
 def move():
     move_id = uuid.uuid4().hex[:8]
 
-    board, move_history, captured_pieces, special_moves = get_game_state()
+    board, move_history, captured_pieces, special_moves, special_moves_by_color = get_game_state()
     game, is_active = get_active_game_or_abort()
 
     logger.info("[%s] /move request received", move_id)
@@ -167,7 +167,7 @@ def move():
         logger.info("[%s] Legal move accepted", move_id)
             
         # Execute the move
-        process_player_move(board, move, move_history, captured_pieces, special_moves)
+        GameService.process_player_move(board, move, move_history, captured_pieces, special_moves)
        
         # Clear test position flag if it was set (after first move)
         session.pop('_test_position_set', None)
@@ -221,7 +221,7 @@ def ai_move():
     game_id = session.get("game_id")
     game = db.session.get(Game, game_id) if game_id else None
 
-    board, move_history, captured_pieces, special_moves = get_game_state()
+    board, move_history, captured_pieces, special_moves, special_moves_by_color = get_game_state()
 
     if game and game.ended_at is not None:
         return state_response(status="game_over", from_session=True, code=400)
@@ -250,10 +250,7 @@ def ai_move():
         logger.info("Fallback random move selected | uci=%s", ai_move.uci())
         
     # Execute the AI move
-    process_ai_move(board, move_history, captured_pieces, special_moves, ai_move)
-    # --- END DB LOGGING ---
-
-    save_game_state(board, move_history, captured_pieces, special_moves)
+    GameService.process_ai_move(board, move_history, captured_pieces, special_moves, ai_move)
 
     return state_response(
         status="ok",
@@ -276,10 +273,8 @@ def reset():
         game = db.session.get(Game, game_id)
         if game and game.ended_at is None:
             logger.info("Abandoning active game | game_id=%s", game_id)
-            finalize_game(game, "*", "abandoned")
-            game.state = "abandoned"
-            db.session.commit()
-            touch_game(game)
+            GameService.abandon_game()
+
     session.clear()  # This also clears _test_position_set flag
     logger.debug("Session cleared and new game initialized")
     init_game()
@@ -316,7 +311,7 @@ def resign():
             code=400
         )
 
-    board, move_history, captured_pieces, special_moves = get_game_state()
+    board, move_history, captured_pieces, special_moves, special_moves_by_color = get_game_state()
 
     data = request.get_json()
     resigning_color = data.get("color")  # "white" or "black"
@@ -334,18 +329,13 @@ def resign():
     winner = "black" if resigning_color == "white" else "white"
     result = "1-0" if winner == "white" else "0-1"
 
-    log_game_action(
-        game,
-        board,
-        "[Resignation]"
-    )
+    result_winner = GameService.resign(board, resigning_color)
+    if not result_winner:
+        return state_response(status="error", from_session=True, extra={"message": "Game already ended"}, code=400)
 
-    finalize_game(game, result, "resignation")
-    db.session.commit()
-    if game:
-        touch_game(game)
+    result, winner = result_winner
+
     logger.info("Game resigned | game_id=%s | resigning_color=%s | winner=%s", game_id, resigning_color, winner)
-
     session.pop("fen", None)
     session.pop("move_history", None)
     session.pop("captured_pieces", None)
@@ -368,29 +358,23 @@ def resign():
 # 50-move rule draw claim
 @game_bp.route("/claim-draw/50-move", methods=["POST"])
 def claim_50_move_draw():
-    game_id = session.get("game_id")
-    board, move_history, captured_pieces, special_moves = get_game_state()
-    game = db.session.get(Game, game_id)
-
-    if not game or game.ended_at:
-        logger.warning("50-move draw claim on ended game | game_id=%s", game_id)
-        return state_response(status="game_over", from_session=True)
+    board, move_history, captured_pieces, special_moves, special_moves_by_color = get_game_state()
 
     if not board.is_fifty_moves():
-        logger.debug("50-move draw claim invalid | game_id=%s | halfmove_clock=%s", game_id, board.halfmove_clock)
-        return state_response(status="invalid", from_session=True, extra={"reason": "not_claimable"}, code=400)
-        
-    log_game_action(
-        game,
-        board,
-        "[Draw claimed: 50-move rule]"
-    )
+        return state_response(
+            status="invalid",
+            from_session=True,
+            extra={"reason": "not_claimable"},
+            code=400
+        )
 
-    finalize_game(game, "1/2-1/2", "draw_50_move_rule")
-    if game:
-        touch_game(game)
-    logger.info("Draw claimed by 50-move rule | game_id=%s", game_id)
-    
+    result = GameService.claim_draw(board, "draw_50_move_rule")
+
+    if not result:
+        return state_response(status="game_over", from_session=True)
+
+    logger.info("Draw claimed by 50-move rule")
+
     return state_response(
         status="ok",
         board=board,
@@ -399,36 +383,30 @@ def claim_50_move_draw():
         special_moves=special_moves,
         extra={
             "game_over": True,
-            "result": "1/2-1/2",
-            "termination_reason": "draw_50_move_rule"
+            "result": result["result"],
+            "termination_reason": result["termination_reason"]
         }
     )
 
 # claim threefold repetition draw
 @game_bp.route("/claim-draw/repetition", methods=["POST"])
 def claim_repetition_draw():
-    game_id = session.get("game_id")
-    board, move_history, captured_pieces, special_moves = get_game_state()
-    game = db.session.get(Game, game_id)
-
-    if not game or game.ended_at:
-        logger.warning("Repetition draw claim on ended game | game_id=%s", game_id)
-        return state_response(status="game_over", from_session=True)
+    board, move_history, captured_pieces, special_moves, special_moves_by_color = get_game_state()
 
     if not board.can_claim_threefold_repetition():
-        logger.debug("Repetition draw claim invalid | game_id=%s", game_id)
-        return state_response(status="invalid", from_session=True, extra={"reason": "not_claimable"}, code=400)
-        
-    log_game_action(
-        game,
-        board,
-        "[Draw claimed: threefold repetition]"
-    )
+        return state_response(
+            status="invalid",
+            from_session=True,
+            extra={"reason": "not_claimable"},
+            code=400
+        )
 
-    finalize_game(game, "1/2-1/2", "draw_threefold_repetition")
-    if game:
-        touch_game(game)
-    logger.info("Draw claimed by threefold repetition | game_id=%s", game_id)
+    result = GameService.claim_draw(board, "draw_threefold_repetition")
+
+    if not result:
+        return state_response(status="game_over", from_session=True)
+
+    logger.info("Draw claimed by threefold repetition")
 
     return state_response(
         status="ok",
@@ -438,33 +416,23 @@ def claim_repetition_draw():
         special_moves=special_moves,
         extra={
             "game_over": True,
-            "result": "1/2-1/2",
-            "termination_reason": "draw_threefold_repetition"
+            "result": result["result"],
+            "termination_reason": result["termination_reason"]
         }
     )
     
 # draw agreement route
 @game_bp.route("/draw-agreement", methods=["POST"])
 def draw_agreement():
-    game_id = session.get("game_id")
-    board, move_history, captured_pieces, special_moves = get_game_state()
-    game = db.session.get(Game, game_id)
+    board, move_history, captured_pieces, special_moves, special_moves_by_color = get_game_state()
 
-    if not game or game.ended_at:
-        logger.warning("Draw agreement on ended game | game_id=%s", game_id)
+    result = GameService.claim_draw(board, "draw_by_agreement")
+
+    if not result:
         return state_response(status="game_over", from_session=True)
-        
-    log_game_action(
-        game,
-        board,
-        "[Draw agreed]"
-    )
 
-    finalize_game(game, "1/2-1/2", "draw_by_agreement")
-    if game:
-        touch_game(game)
-    logger.info("Draw agreed by both players | game_id=%s", game_id)
-    
+    logger.info("Draw agreed by both players")
+
     return state_response(
         status="ok",
         board=board,
@@ -473,8 +441,8 @@ def draw_agreement():
         special_moves=special_moves,
         extra={
             "game_over": True,
-            "result": "1/2-1/2",
-            "termination_reason": "draw_by_agreement"
+            "result": result["result"],
+            "termination_reason": result["termination_reason"]
         }
     )
     
@@ -530,7 +498,23 @@ def test_set_position():
     session['fen'] = fen
     session['move_history'] = data.get('move_history', [])
     session['captured_pieces'] = data.get('captured_pieces', {'white': [], 'black': []})
-    session['special_moves'] = data.get('special_moves', [])
+    # Preserve provided special_moves list for backward compatibility
+    provided_special = data.get('special_moves', [])
+    session['special_moves'] = provided_special
+
+    # Build a simple per-color mapping from provided list when possible.
+    # If items are prefixed with 'White:' or 'Black:' we honor them;
+    # otherwise default to assigning to white (keeps prior behavior).
+    sm_by_color = {'white': [], 'black': []}
+    for item in provided_special:
+        if isinstance(item, str) and item.lower().startswith('white:'):
+            sm_by_color['white'].append(item.split(':', 1)[1].strip())
+        elif isinstance(item, str) and item.lower().startswith('black:'):
+            sm_by_color['black'].append(item.split(':', 1)[1].strip())
+        else:
+            sm_by_color['white'].append(item)
+
+    session['special_moves_by_color'] = sm_by_color
     session['_test_position_set'] = True
         
     # Create/update game for this test position

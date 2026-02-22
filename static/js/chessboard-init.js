@@ -265,18 +265,29 @@ $(document).ready(function () {
 
     window.updatePositionEvaluation = updatePositionEvaluation;
 
-    function updateSpecialMove(special_moves) {
+    function updateSpecialMove(specialMoves) {
         const whiteList = $("#special-white");
         const blackList = $("#special-black");
-
-        if (!Array.isArray(special_moves)) return;
 
         whiteList.empty();
         blackList.empty();
 
-        if (special_moves.length === 0) return;
+        if (!specialMoves) return;
 
-        special_moves.forEach(move => {
+        // New format: { white: [...], black: [...] }
+        if (!Array.isArray(specialMoves) && typeof specialMoves === "object") {
+            const whiteMoves = Array.isArray(specialMoves.white) ? specialMoves.white : [];
+            const blackMoves = Array.isArray(specialMoves.black) ? specialMoves.black : [];
+
+            whiteMoves.forEach(move => whiteList.append($("<li>").text(move)));
+            blackMoves.forEach(move => blackList.append($("<li>").text(move)));
+            return;
+        }
+
+        // Legacy format: ["Castling", "White: Promotion to Q", ...]
+        if (!Array.isArray(specialMoves) || specialMoves.length === 0) return;
+
+        specialMoves.forEach(move => {
             let color = null;
             let text = move;
 
@@ -359,7 +370,8 @@ $(document).ready(function () {
         updateDrawButtons(state);
         updateCaptured(state.captured_pieces);
         updateMoveHistory(state.move_history);
-        updateSpecialMove(state.special_moves);
+        // Prefer per-color mapping when available, fallback to legacy list
+        updateSpecialMove(state.special_moves_by_color || state.special_moves);
         updateMaterialAdvantage(state.material);
         updatePositionEvaluation(state.evaluation);
 

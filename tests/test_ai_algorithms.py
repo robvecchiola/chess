@@ -117,12 +117,22 @@ class TestAIMoveSelection:
         
         # Queen should move to safety, not stay in danger
         assert best_move is not None
-        # Queen shouldn't move to attacked square
+        moving_piece = board.piece_at(best_move.from_square)
         board.push(best_move)
-        # Verify queen is safe
-        if board.piece_at(best_move.to_square):
-            # If queen moved, check it's not hanging
-            pass
+
+        # Verify the white queen is not left hanging after the AI move.
+        queens = list(board.pieces(chess.QUEEN, chess.WHITE))
+        assert len(queens) == 1, f"Expected exactly one white queen, found {len(queens)}"
+        queen_square = queens[0]
+        assert not board.is_attacked_by(chess.BLACK, queen_square), (
+            f"AI move {best_move.uci()} leaves white queen attacked on {chess.square_name(queen_square)}"
+        )
+
+        # If AI moved the queen, destination square must also be safe.
+        if moving_piece and moving_piece.piece_type == chess.QUEEN and moving_piece.color == chess.WHITE:
+            assert not board.is_attacked_by(chess.BLACK, best_move.to_square), (
+                f"AI moved queen to attacked square {chess.square_name(best_move.to_square)}"
+            )
         board.pop()
     
     @pytest.mark.unit

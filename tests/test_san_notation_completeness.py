@@ -283,9 +283,8 @@ def test_no_capture_notation_when_not_capture(client):
     
     # Should not have x
     last_move = rv["move_history"][-1]
-    # "e4" should not have "x"
-    # (unless it's part of some other notation)
-    # e4 is just "e4", not "exf5" style
+    assert "x" not in last_move, f"Non-capture move should not include 'x', got: {last_move}"
+    assert last_move == "e4", f"Expected SAN 'e4' for opening pawn move, got: {last_move}"
 
 
 # =============================================================================
@@ -341,8 +340,15 @@ def test_piece_disambiguation_multiple_rooks(client):
 
 def test_piece_disambiguation_bishops(client):
     """Multiple bishops moving to same square"""
-    # This is less common but possible with promoted pieces
-    # Skip this for now as it requires complex setup
+    reset_board(client)
+
+    # Two white bishops can both move to e5; SAN must include file disambiguation.
+    set_position(client, "4k3/8/8/8/8/2B3B1/8/4K3 w - - 0 1")
+    rv = make_move(client, "c3", "e5")
+
+    assert rv["status"] == "ok", f"Expected legal bishop move, got: {rv}"
+    last_move = rv["move_history"][-1]
+    assert last_move == "Bce5", f"Expected bishop file disambiguation 'Bce5', got: {last_move}"
 
 
 # =============================================================================

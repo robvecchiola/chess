@@ -135,7 +135,7 @@ def test_ai_capture_tracking(client):
 
 def test_ai_chooses_best_move():
     """Test that AI chooses a reasonable move (capture when available)"""
-    from ai import choose_ai_move
+    from ai import choose_ai_move, evaluate_board
     import chess
     
     # Simple position: black queen can capture white knight
@@ -148,9 +148,21 @@ def test_ai_chooses_best_move():
     # If queen can capture knight, it should prefer that
     queen_capture = chess.Move.from_uci('d8f6')
     if queen_capture in board.legal_moves:
-        # At minimum, the AI should not choose a terrible move
-        # (This test would fail with the old bug)
-        pass
+        # At minimum, AI's chosen move should evaluate at least as well
+        # as the obvious tactical capture (within a small tolerance).
+        best_board = board.copy()
+        best_board.push(best_move)
+        best_score = evaluate_board(best_board)
+
+        capture_board = board.copy()
+        capture_board.push(queen_capture)
+        capture_score = evaluate_board(capture_board)
+
+        # Lower score favors black in this position.
+        assert best_score <= capture_score + 100, (
+            f"AI chose a significantly weaker move: {best_move.uci()} "
+            f"(score {best_score}) vs d8f6 (score {capture_score})"
+        )
 
 def test_ai_evaluation_function():
     """Test that the evaluation function works correctly"""

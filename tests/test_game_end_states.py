@@ -289,16 +289,23 @@ def test_claim_50_move_draw_game_over(client):
 def test_claim_50_move_after_game_over_error(client):
     """Cannot claim 50-move draw after game already ended"""
     reset_board(client)
-    
-    # End game via resignation first
-    client.post("/resign", 
-                data=json.dumps({"color": "white"}), 
-                content_type="application/json")
-    
-    # Try to claim 50-move draw
-    # Note: FEN is cleared after resign, so new game will be initialized
-    # This test needs to be adjusted - you can't claim on a fresh game
-    pass
+
+    # Prepare a claimable 50-move position, then end the game first.
+    with client.session_transaction() as sess:
+        fen_parts = chess.STARTING_FEN.split()
+        fen_parts[4] = "100"
+        sess["fen"] = " ".join(fen_parts)
+        sess["move_history"] = []
+        sess["captured_pieces"] = {"white": [], "black": []}
+        sess["special_moves"] = []
+        sess.modified = True
+
+    first = client.post("/draw-agreement").get_json()
+    assert first["status"] == "ok"
+
+    # Claiming again after game end should return game_over.
+    second = client.post("/claim-draw/50-move").get_json()
+    assert second["status"] == "game_over"
 
 
 # =============================================================================
@@ -373,14 +380,21 @@ def test_claim_repetition_draw_logged_to_database(client):
 def test_claim_repetition_after_game_over_error(client):
     """Cannot claim repetition after game already ended"""
     reset_board(client)
-    
-    # End game via resignation
-    client.post("/resign", 
-                data=json.dumps({"color": "white"}), 
-                content_type="application/json")
-    
-    # Cannot claim on new game - skip this test for now
-    pass
+
+    # Seed a threefold-claimable position.
+    with client.session_transaction() as sess:
+        sess["fen"] = chess.STARTING_FEN
+        sess["move_history"] = ["Nf3", "Nf6", "Ng1", "Ng8", "Nf3", "Nf6", "Ng1", "Ng8"]
+        sess["captured_pieces"] = {"white": [], "black": []}
+        sess["special_moves"] = []
+        sess.modified = True
+
+    first = client.post("/claim-draw/repetition").get_json()
+    assert first["status"] == "ok"
+
+    # Claiming again on the same ended game should report game_over.
+    second = client.post("/claim-draw/repetition").get_json()
+    assert second["status"] == "game_over"
 
 
 # =============================================================================
@@ -432,14 +446,13 @@ def test_draw_agreement_logged_to_database(client):
 def test_draw_agreement_game_over_error(client):
     """Cannot agree to draw after game already ended"""
     reset_board(client)
-    
-    # End game via resignation
-    client.post("/resign", 
-                data=json.dumps({"color": "white"}), 
-                content_type="application/json")
-    
-    # Try to agree to draw on new game - skip
-    pass
+
+    first = client.post("/draw-agreement").get_json()
+    assert first["status"] == "ok"
+
+    # Second draw agreement request should be rejected as game_over.
+    second = client.post("/draw-agreement").get_json()
+    assert second["status"] == "game_over"
 
 
 def test_draw_agreement_creates_game_move_entry(client):

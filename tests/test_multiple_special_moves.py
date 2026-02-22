@@ -20,7 +20,7 @@ def test_multiple_special_moves_accumulation():
         init_game()
         
         # Get initial state
-        board, move_history, captured_pieces, special_moves = get_game_state()
+        board, move_history, captured_pieces, special_moves, special_moves_by_color = get_game_state()
         print(f"Initial special_moves: {special_moves}")
         assert special_moves == [], "Should start with no special moves"
         

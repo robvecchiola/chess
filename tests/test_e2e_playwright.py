@@ -1076,29 +1076,32 @@ def test_evaluation_shows_winning_for_checkmate(page: Page, live_server):
     page.goto(live_server)
     page.wait_for_load_state("networkidle")
     
-    # Set up back rank mate: Ra8#
-    checkmate_fen = "6k1/5ppp/8/8/8/8/5PPP/R6K b - - 0 1"
+    # Set up a true checkmate position (black to move, checkmated).
+    checkmate_fen = "7k/7Q/7K/8/8/8/8/8 b - - 0 1"
     
     setup_board_position(
         page,
         checkmate_fen,
         live_server=live_server,
-        move_history=["Ra8#"],
+        move_history=[],
         captured_pieces={"white": [], "black": []},
         special_moves=[]
     )
     
     page.wait_for_timeout(2000)
-    
-    # After checkmate, game should be over
+
+    # Checkmate should be reflected in the client state.
+    config_state = page.evaluate("window.CHESS_CONFIG")
+    assert config_state.get("checkmate") is True, f"Expected checkmate=True, got: {config_state}"
+    assert config_state.get("game_over") is True, f"Expected game_over=True, got: {config_state}"
+
+    # UI status should indicate a terminal/check position.
     status = page.locator("#game-status")
-    status_text = status.text_content()
-    
-    # If checkmate detected, status should show it
-    if "Checkmate" in status_text or "wins" in status_text:
-        # Checkmate positions should have extreme evaluation
-        # (but UI may not show it if game is over)
-        pass
+    expect(status).to_have_text(re.compile(r"check|wins|game over", re.IGNORECASE))
+
+    # Evaluation text should remain populated even in terminal states.
+    eval_text = page.locator("#position-eval").text_content()
+    assert eval_text is not None and len(eval_text.strip()) > 0, "Evaluation text should not be empty"
 
 
 def test_material_display_has_correct_classes(page: Page, live_server):
