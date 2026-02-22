@@ -4,7 +4,7 @@ import chess
 import random
 from models import Game, GameMove, db
 from datetime import datetime
-
+from game.services import process_ai_move, process_player_move
 from ai import choose_ai_move, material_score, evaluate_board
 from helpers import explain_illegal_move, finalize_game, finalize_game_if_over, get_active_game_or_abort, get_ai_record, get_game_state, get_or_create_player_uuid, init_game, log_game_action, save_game_state, execute_move, state_response, touch_game
 
@@ -167,45 +167,11 @@ def move():
         logger.info("[%s] Legal move accepted", move_id)
             
         # Execute the move
-        execute_move(board, move, move_history, captured_pieces, special_moves)
-
-        if move.promotion:
-            logger.info(
-                "[%s] Pawn promotion to %s",
-                move_id,
-                chess.piece_name(move.promotion),
-            )
-
-        logger.debug("[%s] Board after move: %s", move_id, board.fen())
-
-        #add to the db
-        game_id = session.get("game_id")
-        game = db.session.get(Game, game_id) if game_id else None
-
-        if game:
-            # Determine the color that just moved
-            # After board.push(), it's the opponent's turn, so we need the opposite of current turn
-            move_color = "white" if board.turn == chess.BLACK else "black"
-            db.session.add(GameMove(
-                game_id=game_id,
-                move_number=len(move_history),
-                color=move_color,
-                san=move_history[-1],
-                uci=move.uci(),
-                fen_after=board.fen()
-            ))
-            db.session.commit()
-        if game:
-            finalize_game_if_over(board, game)
-        if game:
-            touch_game(game)
-                
+        process_player_move(board, move, move_history, captured_pieces, special_moves)
+       
         # Clear test position flag if it was set (after first move)
         session.pop('_test_position_set', None)
             
-        # Save updated session state
-        save_game_state(board, move_history, captured_pieces, special_moves)
-
         material = material_score(board)
         evaluation = evaluate_board(board)
 
@@ -284,26 +250,7 @@ def ai_move():
         logger.info("Fallback random move selected | uci=%s", ai_move.uci())
         
     # Execute the AI move
-    execute_move(board, ai_move, move_history, captured_pieces, special_moves, is_ai=True)
-
-    # --- DB LOGGING (AI move) ---
-    game_id = session.get("game_id")
-    game = db.session.get(Game, game_id) if game_id else None
-    if game:
-        db.session.add(GameMove(
-            game_id=game_id,
-            move_number=len(move_history),
-            color="black",
-            san=move_history[-1],
-            uci=ai_move.uci(),
-            fen_after=board.fen()
-        ))
-        db.session.commit()
-        
-    if game:
-        finalize_game_if_over(board, game)
-    if game:
-        touch_game(game)
+    process_ai_move(board, move_history, captured_pieces, special_moves, ai_move)
     # --- END DB LOGGING ---
 
     save_game_state(board, move_history, captured_pieces, special_moves)
