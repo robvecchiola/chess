@@ -25,6 +25,69 @@ def make_move(client, from_sq, to_sq, promotion=None):
     rv = client.post("/move", data=json.dumps(payload), content_type="application/json")
     return rv.get_json()
 
+def test_move_with_json_null_body_returns_invalid_format(client):
+    reset_board(client)
+
+    rv = client.post("/move", data="null", content_type="application/json")
+    data = rv.get_json()
+
+    assert rv.status_code == 400
+    assert data["status"] == "illegal"
+    assert "Invalid move format" in data["message"]
+
+def test_move_unexpected_exception_returns_error(client, monkeypatch):
+    reset_board(client)
+
+    def _boom(*args, **kwargs):
+        raise RuntimeError("forced-move-error")
+
+    monkeypatch.setattr("game.routes.GameService.process_player_move", _boom)
+    rv = make_move(client, "e2", "e4")
+
+    assert rv["status"] == "error"
+    assert "forced-move-error" in rv["message"]
+
+def test_ai_move_returns_game_over_when_position_is_terminal(client):
+    app.config['AI_ENABLED'] = False
+    reset_board(client)
+
+    with client.session_transaction() as sess:
+        sess["fen"] = "7k/7Q/7K/8/8/8/8/8 b - - 0 1"  # checkmated black
+        sess["move_history"] = []
+        sess["captured_pieces"] = {"white": [], "black": []}
+        sess["special_moves"] = []
+        sess["special_moves_by_color"] = {"white": [], "black": []}
+        sess.modified = True
+
+    rv = client.post("/ai-move").get_json()
+    assert rv["status"] == "ok"
+    assert rv["game_over"] is True
+
+def test_ai_move_falls_back_to_random_when_choose_returns_none(client, monkeypatch):
+    app.config['AI_ENABLED'] = False
+    reset_board(client)
+    make_move(client, "e2", "e4")  # set black to move
+
+    monkeypatch.setattr("game.routes.choose_ai_move", lambda board, depth=1: None)
+    rv = client.post("/ai-move").get_json()
+
+    assert rv["status"] == "ok"
+    assert len(rv["move_history"]) == 2
+
+def test_ai_move_falls_back_to_random_when_choose_raises(client, monkeypatch):
+    app.config['AI_ENABLED'] = False
+    reset_board(client)
+    make_move(client, "e2", "e4")  # set black to move
+
+    def _raise(*args, **kwargs):
+        raise RuntimeError("choose-ai-failed")
+
+    monkeypatch.setattr("game.routes.choose_ai_move", _raise)
+    rv = client.post("/ai-move").get_json()
+
+    assert rv["status"] == "ok"
+    assert len(rv["move_history"]) == 2
+
 def test_home(client, monkeypatch):
     # Accept template name and any keyword args
     monkeypatch.setattr("game.routes.render_template", lambda x, **kwargs: "OK")
@@ -368,6 +431,55 @@ def test_multiple_special_moves_accumulation(client):
     assert len(rv["special_moves"]) == 2
     assert any("En Passant" in m for m in rv["special_moves"]), f"Expected En Passant in {rv['special_moves']}"
     assert any("Castling" in m for m in rv["special_moves"]), f"Expected Castling in {rv['special_moves']}"
+
+def test_special_moves_by_color_tracks_white_and_black_castling(client):
+    """special_moves_by_color should track special moves for each side independently."""
+    app.config['AI_ENABLED'] = False
+    reset_board(client)
+    set_position(client, "r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1")
+
+    rv_white = make_move(client, "e1", "g1")
+    assert rv_white["status"] == "ok"
+    assert rv_white["special_moves"] == ["Castling"]
+    assert rv_white["special_moves_by_color"]["white"] == ["Castling"]
+    assert rv_white["special_moves_by_color"]["black"] == []
+
+    rv_black = make_move(client, "e8", "c8")
+    assert rv_black["status"] == "ok"
+    assert rv_black["special_moves"] == ["Castling", "Castling"]
+    assert rv_black["special_moves_by_color"]["white"] == ["Castling"]
+    assert rv_black["special_moves_by_color"]["black"] == ["Castling"]
+
+def test_special_moves_by_color_recreated_when_missing_from_session(client):
+    """Move execution should recreate special_moves_by_color if session is missing the key."""
+    app.config['AI_ENABLED'] = False
+    reset_board(client)
+
+    with client.session_transaction() as sess:
+        sess["fen"] = "r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1"
+        sess["move_history"] = []
+        sess["captured_pieces"] = {"white": [], "black": []}
+        sess["special_moves"] = []
+        sess.pop("special_moves_by_color", None)
+        sess.modified = True
+
+    rv = make_move(client, "e1", "g1")
+    assert rv["status"] == "ok"
+    assert rv["special_moves_by_color"] == {"white": ["Castling"], "black": []}
+
+def test_illegal_move_response_includes_special_moves_by_color(client):
+    """Illegal move responses should still include special_moves_by_color for UI consistency."""
+    app.config['AI_ENABLED'] = False
+    reset_board(client)
+
+    with client.session_transaction() as sess:
+        sess.pop("special_moves_by_color", None)
+        sess.modified = True
+
+    rv = make_move(client, "e2", "e5")
+    assert rv["status"] == "illegal"
+    assert "special_moves_by_color" in rv
+    assert rv["special_moves_by_color"] == {"white": [], "black": []}
 
 def test_san_notation_includes_capture(client):
     app.config['AI_ENABLED'] = False

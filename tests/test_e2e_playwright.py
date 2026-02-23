@@ -8,7 +8,7 @@ Run with specific browser: pytest tests/test_e2e_playwright.py --browser firefox
 """
 import pytest
 import re
-from playwright.sync_api import Page, expect
+from playwright.sync_api import Page, expect, TimeoutError as PlaywrightTimeoutError
 
 from tests.helper import setup_board_position
 
@@ -753,8 +753,32 @@ def test_game_state_after_many_moves(page: Page, live_server):
 
 def test_snapback_piece_to_original_square(page: Page, live_server):
     """Test that dragging piece to same square doesn't cause errors"""
-    page.goto(live_server)
-    page.wait_for_selector("#board")
+    page.set_viewport_size({"width": 1280, "height": 720})
+
+    board_ready = False
+    for _ in range(2):
+        page.goto(live_server, wait_until="domcontentloaded")
+        page.wait_for_selector("#board", state="attached")
+        try:
+            page.wait_for_function(
+                """
+                () => {
+                    const board = document.getElementById('board');
+                    if (!board) return false;
+                    const rect = board.getBoundingClientRect();
+                    const hasSquares = board.querySelector('.square-55d63') !== null;
+                    return hasSquares && rect.width > 0 && rect.height > 0;
+                }
+                """,
+                timeout=10000,
+            )
+            board_ready = True
+            break
+        except PlaywrightTimeoutError:
+            # Retry once: transient frontend/bootstrap races can leave #board attached but not rendered.
+            page.reload(wait_until="networkidle")
+
+    assert board_ready, "Board failed to initialize for snapback test"
     page.wait_for_timeout(500)
     
     # Try to verify snapback by checking end state
