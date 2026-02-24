@@ -139,3 +139,13 @@ class GameService:
             game.state = "abandoned"
             touch_game(game)
             db.session.commit()
+
+    #-------------------------
+    # game active check
+    #-------------------------
+    @staticmethod
+    def ensure_active_game():
+        game = GameService.get_game()
+        if not game or game.ended_at:
+            return None
+        return game
