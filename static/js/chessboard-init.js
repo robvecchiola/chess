@@ -321,18 +321,22 @@ $(document).ready(function () {
         // Set up promotion button handlers
         document.getElementById("promotion-q").onclick = () => {
             dialog.style.display = "none";
+            moveInFlight = false;
             onPromotionSelected("q");
         };
         document.getElementById("promotion-r").onclick = () => {
             dialog.style.display = "none";
+            moveInFlight = false;
             onPromotionSelected("r");
         };
         document.getElementById("promotion-b").onclick = () => {
             dialog.style.display = "none";
+            moveInFlight = false;
             onPromotionSelected("b");
         };
         document.getElementById("promotion-n").onclick = () => {
             dialog.style.display = "none";
+            moveInFlight = false;
             onPromotionSelected("n");
         };
 

@@ -200,44 +200,21 @@ def test_threefold_repetition_draw(client):
         rv = make_move(client, from_sq, to_sq)
     assert rv["can_claim_repetition"] == True
 
-@pytest.mark.skip(reason="Test requires 100 half-moves without repetition or no legal moves - difficult to achieve")
 def test_fifty_move_draw(client):
     app.config['AI_ENABLED'] = False
     reset_board(client)
-    # Make 100 half-moves without capture or pawn move
-    # Use a sequence that develops pieces without repeating positions
-    import chess
-    board_test = chess.Board()
-    moves_made = 0
-    max_moves = 100
-    
-    while moves_made < max_moves:
-        # Find a legal move that isn't a pawn move and isn't a capture
-        found = False
-        for move in reversed(list(board_test.legal_moves)):
-            piece = board_test.piece_at(move.from_square)
-            # Skip pawn moves and captures
-            if piece.piece_type == chess.PAWN:
-                continue
-            if board_test.is_capture(move):
-                continue
-            
-            from_sq = chess.square_name(move.from_square)
-            to_sq = chess.square_name(move.to_square)
-            rv = make_move(client, from_sq, to_sq)
-            
-            if rv["status"] == "ok":
-                board_test.push(move)
-                moves_made += 1
-                found = True
-                break
-        
-        if not found:
-            # No more valid moves that aren't pawn/capture
-            break
-    
-    # After 100 half-moves of non-pawn, non-capture moves, fifty_moves should be True
-    assert rv["fifty_moves"] == True, f"Expected fifty_moves=True after {moves_made} halfmoves, got False"
+    # Deterministic setup: halfmove clock at 99, then one quiet legal move.
+    with client.session_transaction() as sess:
+        sess["fen"] = "7k/1r6/8/8/8/8/8/K6R w - - 99 1"
+        sess["move_history"] = []
+        sess["captured_pieces"] = {"white": [], "black": []}
+        sess["special_moves"] = []
+        sess["special_moves_by_color"] = {"white": [], "black": []}
+        sess.modified = True
+
+    rv = make_move(client, "h1", "h2")
+    assert rv["status"] == "ok", f"Expected legal quiet move, got: {rv}"
+    assert rv["fifty_moves"] is True, f"Expected fifty_moves=True after halfmove 100, got: {rv}"
 
 def test_insufficient_material_king_bishop_vs_king(client):
     app.config['AI_ENABLED'] = False
