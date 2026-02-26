@@ -11,6 +11,9 @@ from helpers import (
 )
 from datetime import datetime
 
+import logging
+logger = logging.getLogger(__name__)
+
 
 class GameService:
 
@@ -28,6 +31,14 @@ class GameService:
         execute_move(board, move, move_history, captured_pieces, special_moves)
 
         game = GameService.get_game()
+
+        logger.info(
+            "event=player_move_applied game_id=%s move=%s fen=%s",
+            game.id if game else None,
+            move.uci(),
+            board.fen()
+        )
+
         if game:
             move_color = "white" if board.turn == chess.BLACK else "black"
 
@@ -41,6 +52,13 @@ class GameService:
             ))
 
             finalize_game_if_over(board, game)
+            if game.ended_at:
+                logger.info(
+                    "event=game_ended game_id=%s result=%s reason=%s",
+                    game.id,
+                    game.result,
+                    game.termination_reason
+                )
             touch_game(game)
             db.session.commit()
 
@@ -55,6 +73,14 @@ class GameService:
         execute_move(board, ai_move, move_history, captured_pieces, special_moves, is_ai=True)
 
         game = GameService.get_game()
+
+        logger.info(
+            "event=ai_move_applied game_id=%s move=%s fen=%s",
+            game.id if game else None,
+            ai_move.uci(),
+            board.fen()
+        )
+
         if game:
             db.session.add(GameMove(
                 game_id=game.id,
@@ -66,6 +92,13 @@ class GameService:
             ))
 
             finalize_game_if_over(board, game)
+            if game.ended_at:
+                logger.info(
+                    "event=game_ended game_id=%s result=%s reason=%s",
+                    game.id,
+                    game.result,
+                    game.termination_reason
+                )
             touch_game(game)
             db.session.commit()
 
@@ -87,6 +120,13 @@ class GameService:
         log_game_action(game, board, "[Resignation]")
         finalize_game(game, result, "resignation")
         touch_game(game)
+
+        logger.info(
+            "event=game_resigned game_id=%s resigning_color=%s winner=%s",
+            game.id,
+            resigning_color,
+            winner
+        )
 
         db.session.commit()
 
@@ -119,6 +159,12 @@ class GameService:
 
         log_game_action(game, board, label)
         finalize_game(game, result, termination_reason)
+        logger.info(
+            "event=draw_claimed game_id=%s result=%s reason=%s",
+            game.id,
+            result,
+            termination_reason
+        )
         touch_game(game)
         db.session.commit()
 
@@ -138,6 +184,10 @@ class GameService:
             finalize_game(game, "*", "abandoned")
             game.state = "abandoned"
             touch_game(game)
+            logger.info(
+                "event=game_abandoned game_id=%s",
+                game.id
+            )
             db.session.commit()
 
     #-------------------------

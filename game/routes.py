@@ -2,11 +2,11 @@ from flask import Blueprint
 from flask import render_template, request, jsonify, session, current_app
 import chess
 import random
-from models import Game, GameMove, db
+from models import Game, db
 from datetime import datetime
 from game.services import GameService
 from ai import choose_ai_move, material_score, evaluate_board
-from helpers import explain_illegal_move, finalize_game, finalize_game_if_over, get_active_game_or_abort, get_ai_record, get_game_state, get_or_create_player_uuid, init_game, log_game_action, save_game_state, execute_move, state_response, touch_game
+from helpers import explain_illegal_move, get_active_game_or_abort, get_ai_record, get_game_state, get_or_create_player_uuid, init_game, state_response
 
 import logging
 logger = logging.getLogger(__name__)
@@ -164,8 +164,6 @@ def move():
                 code=400
             )
             
-        logger.info("[%s] Legal move accepted", move_id)
-            
         # Execute the move
         GameService.process_player_move(board, move, move_history, captured_pieces, special_moves)
        
@@ -174,8 +172,6 @@ def move():
             
         material = material_score(board)
         evaluation = evaluate_board(board)
-
-        logger.info("[%s] Move complete | material=%s | eval=%s", move_id, material, evaluation)
 
         return state_response(
             status="ok",
@@ -272,7 +268,6 @@ def reset():
     if game_id:
         game = db.session.get(Game, game_id)
         if game and game.ended_at is None:
-            logger.info("Abandoning active game | game_id=%s", game_id)
             GameService.abandon_game()
 
     session.clear()  # This also clears _test_position_set flag
@@ -335,7 +330,6 @@ def resign():
 
     result, winner = result_winner
 
-    logger.info("Game resigned | game_id=%s | resigning_color=%s | winner=%s", game_id, resigning_color, winner)
     session.pop("fen", None)
     session.pop("move_history", None)
     session.pop("captured_pieces", None)
@@ -373,8 +367,6 @@ def claim_50_move_draw():
     if not result:
         return state_response(status="game_over", from_session=True)
 
-    logger.info("Draw claimed by 50-move rule")
-
     return state_response(
         status="ok",
         board=board,
@@ -406,8 +398,6 @@ def claim_repetition_draw():
     if not result:
         return state_response(status="game_over", from_session=True)
 
-    logger.info("Draw claimed by threefold repetition")
-
     return state_response(
         status="ok",
         board=board,
@@ -430,8 +420,6 @@ def draw_agreement():
 
     if not result:
         return state_response(status="game_over", from_session=True)
-
-    logger.info("Draw agreed by both players")
 
     return state_response(
         status="ok",
