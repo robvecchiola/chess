@@ -1090,3 +1090,65 @@ def test_resign_after_moves(page: Page, live_server):
     expect(status).to_contain_text("Black wins", timeout=5000)
     expect(status).to_contain_text("resignation")
 
+
+def test_draw_then_resign_updates_ai_record_counters(page: Page, live_server):
+    """Draw by agreement increments AI draws, then resignation increments AI wins."""
+    page.goto(live_server)
+    wait_for_board_ready(page)
+
+    def get_ai_record():
+        return page.evaluate(
+            """
+            async () => {
+                const response = await fetch("/stats/ai-record", { credentials: "include" });
+                return response.json();
+            }
+            """
+        )
+
+    initial_record = get_ai_record()
+    initial_wins = int(initial_record["wins"])
+    initial_draws = int(initial_record["draws"])
+
+    with page.expect_response(lambda resp: "/draw-agreement" in resp.url and resp.request.method == "POST") as draw_response_info:
+        page.click("#offer-draw-btn")
+    draw_response = draw_response_info.value.json()
+    assert draw_response["status"] == "ok", f"Unexpected /draw-agreement response: {draw_response}"
+    expect(page.locator("#game-status")).to_have_text(re.compile(r"draw", re.IGNORECASE))
+
+    record_after_draw = get_ai_record()
+    assert int(record_after_draw["draws"]) == initial_draws + 1, (
+        f"Expected draws to increment by 1 after draw offer. "
+        f"Before={initial_draws}, after={record_after_draw['draws']}"
+    )
+    assert int(record_after_draw["wins"]) == initial_wins, (
+        f"Wins should be unchanged after draw. "
+        f"Before={initial_wins}, after={record_after_draw['wins']}"
+    )
+    expect(page.locator("#ai-draws")).to_have_text(str(initial_draws + 1))
+
+    with page.expect_response(lambda resp: "/reset" in resp.url and resp.request.method == "POST") as reset_response_info:
+        page.click("#reset-btn")
+    reset_response = reset_response_info.value.json()
+    assert reset_response["status"] == "ok", f"Unexpected /reset response: {reset_response}"
+    wait_for_board_ready(page)
+
+    with page.expect_response(lambda resp: "/resign" in resp.url and resp.request.method == "POST") as resign_response_info:
+        page.click("#resign-btn")
+    resign_response = resign_response_info.value.json()
+    assert resign_response["status"] == "ok", f"Unexpected /resign response: {resign_response}"
+    expect(page.locator("#game-status")).to_have_text(re.compile(r"wins.*resignation|resignation", re.IGNORECASE))
+
+    record_after_resign = get_ai_record()
+    assert int(record_after_resign["draws"]) == initial_draws + 1, (
+        f"Draws should remain incremented by exactly one. "
+        f"Expected={initial_draws + 1}, got={record_after_resign['draws']}"
+    )
+    assert int(record_after_resign["wins"]) == initial_wins + 1, (
+        f"Expected wins to increment by 1 after resignation. "
+        f"Before={initial_wins}, after={record_after_resign['wins']}"
+    )
+
+    expect(page.locator("#ai-draws")).to_have_text(str(initial_draws + 1))
+    expect(page.locator("#ai-wins")).to_have_text(str(initial_wins + 1))
+

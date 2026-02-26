@@ -40,7 +40,7 @@ def home():
     # Session FEN will be preserved across requests as long as it exists
         
     # Get current board state to pass to template
-    board, move_history, captured_pieces, special_moves, special_moves_by_color = get_game_state()
+    board, move_history, captured_pieces, special_moves, _ = get_game_state()
     initial_position = board.fen()
         
     status = ""
@@ -86,7 +86,7 @@ def home():
 def move():
     move_id = uuid.uuid4().hex[:8]
 
-    board, move_history, captured_pieces, special_moves, special_moves_by_color = get_game_state()
+    board, move_history, captured_pieces, special_moves, _ = get_game_state()
     game, is_active = get_active_game_or_abort()
 
     logger.info("[%s] /move request received", move_id)
@@ -217,7 +217,7 @@ def ai_move():
     game_id = session.get("game_id")
     game = db.session.get(Game, game_id) if game_id else None
 
-    board, move_history, captured_pieces, special_moves, special_moves_by_color = get_game_state()
+    board, move_history, captured_pieces, special_moves, _ = get_game_state()
 
     if game and game.ended_at is not None:
         return state_response(status="game_over", from_session=True, code=400)
@@ -306,7 +306,7 @@ def resign():
             code=400
         )
 
-    board, move_history, captured_pieces, special_moves, special_moves_by_color = get_game_state()
+    board, move_history, captured_pieces, special_moves, _ = get_game_state()
 
     data = request.get_json()
     resigning_color = data.get("color")  # "white" or "black"
@@ -352,7 +352,7 @@ def resign():
 # 50-move rule draw claim
 @game_bp.route("/claim-draw/50-move", methods=["POST"])
 def claim_50_move_draw():
-    board, move_history, captured_pieces, special_moves, special_moves_by_color = get_game_state()
+    board, move_history, captured_pieces, special_moves, _ = get_game_state()
 
     if not board.is_fifty_moves():
         return state_response(
@@ -383,7 +383,7 @@ def claim_50_move_draw():
 # claim threefold repetition draw
 @game_bp.route("/claim-draw/repetition", methods=["POST"])
 def claim_repetition_draw():
-    board, move_history, captured_pieces, special_moves, special_moves_by_color = get_game_state()
+    board, move_history, captured_pieces, special_moves, _ = get_game_state()
 
     if not board.can_claim_threefold_repetition():
         return state_response(
@@ -414,7 +414,7 @@ def claim_repetition_draw():
 # draw agreement route
 @game_bp.route("/draw-agreement", methods=["POST"])
 def draw_agreement():
-    board, move_history, captured_pieces, special_moves, special_moves_by_color = get_game_state()
+    board, move_history, captured_pieces, special_moves, _ = get_game_state()
 
     result = GameService.claim_draw(board, "draw_by_agreement")
 

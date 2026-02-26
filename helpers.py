@@ -48,6 +48,30 @@ def init_game():
 
 
 def get_game_state():
+    """Return the current in-session game components.
+
+    The tuple contains five elements:
+    1. `board`          – a python-chess Board object reconstructed from
+                          the stored FEN (or rebuilt from move history if
+                          FEN is corrupted).
+    2. `move_history`   – list of SAN moves played so far.
+    3. `captured_pieces`– dict mapping color to captured piece symbols.
+    4. `special_moves`  – legacy flat list of human-readable special move
+                          labels (eg. "Castling", "Promotion to Q").
+    5. `special_moves_by_color` – **newer** per‑color mapping used by the
+                          frontend and tests. It stores the same labels but
+                          grouped under "white"/"black" keys so the UI
+                          can display them separately without parsing
+                          prefixes. This field is usually ignored by server
+                          logic; it exists primarily as a convenience for
+                          clients (and to keep the full state response
+                          consistent).
+
+    Old code only returned four values; the extra item was added later and
+    most call sites simply unpack and ignore it.  See the route handlers
+    below for examples where we assign to ``_`` to silence unused-variable
+    warnings.
+    """
     if 'fen' not in session or session['fen'] is None:
         init_game()
 
@@ -85,6 +109,9 @@ def save_game_state(board, move_history, captured_pieces, special_moves, special
     session['captured_pieces'] = captured_pieces
     session['special_moves'] = special_moves
     if special_moves_by_color is not None:
+        # When callers explicitly pass a per-color mapping we trust it; most
+        # code simply updates the session directly in ``execute_move`` so
+        # this argument can remain optional.
         session['special_moves_by_color'] = special_moves_by_color
 
     logger.debug("Game state saved | fen=%s", board.fen())

@@ -1,6 +1,6 @@
 """
 E2E test to verify multiple special moves display correctly in the UI.
-Scenario: Multiple castlings and promotions from both white and black.
+Scenario: Multiple special moves from both white and black appear in separate lists.
 """
 import pytest
 import re
@@ -20,44 +20,45 @@ def test_multiple_special_moves_accumulation_ui(page: Page, live_server):
     """
     Test that multiple special moves accumulate and display correctly.
     Scenario:
-    - White castles
-    - White promotes to Queen
-    - White promotes to Knight
-    - Black promotes to Rook
-    Total: 4 special moves (3 white, 1 black)
+    - White castling
+    - White promotion
+    - Black castling
+    - Black promotion
+    - Black en passant
     """
     page.goto(live_server)
     wait_for_board_ready(page)
 
-    # Phase 1: White castling should appear in special-moves UI.
+    # Populate mixed-color special moves via the test endpoint.
     setup_board_position(
         page,
-        "rnbqkbnr/pppppppp/8/8/2B5/5N2/PPPPPPPP/RNBQ1RK1 b kq - 1 1",
-        move_history=["O-O"],
+        "r3k2r/1P4P1/8/8/8/8/8/R3K2R w KQkq - 0 1",
+        move_history=["O-O", "O-O", "b8=Q", "g1=R", "exf6 e.p."],
         captured_pieces={"white": [], "black": []},
-        special_moves=["Castling"],
-    )
-
-    special_white = page.locator("#special-white li")
-    expect(special_white).to_have_count(1, timeout=5000)
-    expect(special_white).to_have_text("Castling")
-    
-    # Phase 2: Set new board state but preserve previous special-move history.
-    setup_board_position(
-        page,
-        "1Q5k/8/8/8/8/8/1P6/K7 b - - 0 1",
-        move_history=["O-O", "b8=Q+"],
-        captured_pieces={"white": [], "black": []},
-        special_moves=["Castling", "Promotion to Q"],
+        special_moves=[
+            "White: Castling",
+            "White: Promotion to Q",
+            "Black: Castling",
+            "Black: Promotion to R",
+            "Black: En Passant",
+        ],
     )
     wait_for_board_ready(page)
 
     special_white = page.locator("#special-white li")
-    expect(special_white.filter(has_text="Castling")).to_have_count(1)
-    expect(special_white.filter(has_text=re.compile(r"Promotion to Q", re.IGNORECASE))).to_have_count(1)
+    special_black = page.locator("#special-black li")
 
-    total_visible = special_white.count() + page.locator("#special-black li").count()
-    assert total_visible >= 2, f"Expected at least 2 total special moves, got {total_visible}"
+    expect(special_white).to_have_count(2, timeout=5000)
+    expect(special_black).to_have_count(3, timeout=5000)
+
+    expect(special_white.filter(has_text=re.compile(r"Castling", re.IGNORECASE))).to_have_count(1)
+    expect(special_white.filter(has_text=re.compile(r"Promotion to Q", re.IGNORECASE))).to_have_count(1)
+    expect(special_black.filter(has_text=re.compile(r"Castling", re.IGNORECASE))).to_have_count(1)
+    expect(special_black.filter(has_text=re.compile(r"Promotion to R", re.IGNORECASE))).to_have_count(1)
+    expect(special_black.filter(has_text=re.compile(r"En Passant", re.IGNORECASE))).to_have_count(1)
+
+    expect(special_white.filter(has_text=re.compile(r"Promotion to R|En Passant", re.IGNORECASE))).to_have_count(0)
+    expect(special_black.filter(has_text=re.compile(r"Promotion to Q", re.IGNORECASE))).to_have_count(0)
 
 
 if __name__ == "__main__":
