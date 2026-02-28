@@ -98,6 +98,22 @@ SESSION_USE_SIGNER = True
 - `SESSION_TYPE = 'default'`: In-memory sessions cleared between requests
 - Missing signer: Cookie validation fails
 
+### Test-only endpoints and session keys
+
+The app exposes `/test/set_position` as a testing helper. Important implementation notes (from `game/routes.py`):
+
+- This endpoint returns 403 unless `current_app.config['TESTING']` is True — do not attempt to call it in production or non-testing runs.
+- When used, the endpoint writes these session keys (examples): `fen`, `move_history`, `captured_pieces`, `special_moves`, and sets `_test_position_set = True`.
+- It also constructs `special_moves_by_color` (a mapping of `white`/`black`) for compatibility with older tests.
+- The endpoint will create a new `Game` DB row when needed and set `session['game_id']` so tests can exercise server-side persistence.
+
+When writing E2E tests that call `/test/set_position`, always call `page.context.clear_cookies()` first so the browser receives the fresh Set-Cookie response for the new session file.
+
+### AI route and test considerations
+
+- The server exposes an `/ai-move` route that triggers server-side AI selection. The route calls `choose_ai_move(board, depth=1)` by default to keep response times short; callers and tests can call `choose_ai_move()` directly with larger `depth` values for deterministic engine testing.
+- The AI implementation uses minimax with alpha-beta pruning and quiescence search, and falls back to a random legal move if selection fails. Integration tests that assert exact AI moves should set appropriate search depth and avoid reliance on randomness.
+
 ## Common Pitfalls & Solutions
 
 ### ❌ Pitfall #1: Illegal Pawn Moves

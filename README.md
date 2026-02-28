@@ -11,9 +11,10 @@ A fully-featured web-based chess application built with Flask, featuring an AI o
   - Draw conditions: threefold repetition, fifty-move rule, insufficient material
 
 - **AI Opponent**
-  - Minimax algorithm with alpha-beta pruning (configurable depth)
-  - Position evaluation with material advantage scoring
-  - Automatic move selection for black pieces
+  - Minimax search with alpha-beta pruning and quiescence search for capture/check stabilization
+  - Move ordering (promotions, captures first) and tie-breaking heuristics
+  - Evaluation uses material values and positional piece-square tables
+  - Server-side selection prefers top-N moves and filters moves that leave high-value pieces hanging
 
 - **User Interface**
   - Interactive drag-and-drop chessboard (chessboard.js)
@@ -75,12 +76,15 @@ The application will be available at `http://127.0.0.1:5000`
 ### Configuration
 
 Edit `config.py` to customize settings:
-- `DevelopmentConfig` - Debug mode enabled, fixed secret key
-- `TestingConfig` - For test suite (in-memory sessions)
-- `ProductionConfig` - Production settings (requires environment variables)
+### Configuration
 
-**Environment Variables:**
-- `SECRET_KEY` - Required for production (session encryption)
+Edit `config.py` to customize settings:
+- `DevelopmentConfig` — local dev settings
+- `TestingConfig` — used by tests (enables test-only endpoints)
+- `ProductionConfig` — production settings (use env vars)
+
+Environment variables to consider:
+- `SECRET_KEY` — required in production
 
 ## Testing
 
@@ -89,6 +93,13 @@ Edit `config.py` to customize settings:
 pytest -v
 ```
 
+### Testing
+
+Run the full test suite:
+
+```bash
+pytest -v
+```
 ### Run Specific Test Files
 ```bash
 pytest tests/test_chess_logic.py -v        # Chess engine tests
@@ -106,17 +117,13 @@ pytest tests/test_e2e_playwright.py -v     # E2E browser tests
 ### Testing Architecture
 
 **Session Persistence in Tests**:
-- Flask-Session configured with `SESSION_PERMANENT = True` for test suite
-- Sessions persist across page navigations via filesystem storage
-- E2E tests use `page.context.clear_cookies()` at test start for isolation
-- Each test gets fresh cookies while maintaining session integrity
+Testing notes (summary)
 
-**AI Configuration**:
-- Unit/Integration tests: `AI_ENABLED = False` (isolates player moves)
-- E2E tests: `AI_ENABLED = True` (tests AI behavior)
-- Always configure AI for test scope
+- The AI implementation is in `ai.py` (minimax + quiescence). The server selects AI moves via `choose_ai_move()`; the UI and the `/ai-move` route use a shallow depth by default to keep responsiveness — depth is configurable in code.
+- Integration tests should set `app.config['AI_ENABLED'] = False` unless the test is explicitly exercising AI behavior.
+- The test-only endpoint `/test/set_position` is only enabled when `app.config['TESTING']` is True.
 
-See [TESTING_GUIDE.md](TESTING_GUIDE.md) for comprehensive testing documentation.
+See [TESTING_GUIDE.md](TESTING_GUIDE.md) for detailed testing patterns and E2E notes.
 
 ## Project Structure
 
@@ -158,11 +165,13 @@ chess/
 
 ## Development Notes
 
-- Session state uses FEN notation for board persistence
-- Move history rebuilt from SAN moves for repetition detection
-- AI defaults to depth=2 for performance (configurable in routes.py)
-- Promotion dialog appears automatically for pawn reaching rank 8
-- Turn enforcement prevents dragging opponent pieces
+## Development notes
+
+- Session state uses FEN notation for board persistence.
+- Move history is stored in session and SAN is used for repetition detection.
+- AI: see `ai.py` — the engine uses minimax with alpha-beta pruning, quiescence search, move ordering, and evaluation combining material and piece-square tables. The server-side `/ai-move` route calls `choose_ai_move(board, depth=1)`; callers may supply different depths for stronger play.
+- Promotion dialog appears automatically for pawn reaching rank 8.
+- Turn enforcement prevents dragging opponent pieces in the UI.
 
 ## Known Limitations
 
