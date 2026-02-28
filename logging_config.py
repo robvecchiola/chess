@@ -1,14 +1,16 @@
 import logging
 import sys
-from flask import has_request_context, g
+from flask import has_request_context, g, session
 
 
 class RequestContextFilter(logging.Filter):
     def filter(self, record):
-        if has_request_context() and hasattr(g, "request_id"):
-            record.request_id = g.request_id
+        if has_request_context():
+            record.request_id = getattr(g, "request_id", "-")
+            record.game_id = session.get("game_id", "-")
         else:
             record.request_id = "-"
+            record.game_id = "-"
         return True
 
 
@@ -35,7 +37,7 @@ def setup_logging(level="INFO"):
 
     # Formatter with request id
     formatter = logging.Formatter(
-        "%(asctime)s | %(levelname)-7s | %(name)s | req=%(request_id)s | %(message)s"
+        "%(asctime)s | %(levelname)-7s | %(name)s | req=%(request_id)s | game=%(game_id)s | %(message)s"
     )
     handler.setFormatter(formatter)
 

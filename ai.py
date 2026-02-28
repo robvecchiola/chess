@@ -259,10 +259,11 @@ def choose_ai_move(board, depth=3):
                 chosen_value, chosen_move = tied_moves[0]
 
     logger.info(
-        "AI selected move | uci=%s | turn=%s | eval=%s",
+        "AI selected move | uci=%s | turn=%s | eval=%s | move_number=%s",
         chosen_move.uci(),
         "white" if board.turn else "black",
-        best_score
+        best_score,
+        board.fullmove_number
     )
 
     return chosen_move
