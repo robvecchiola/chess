@@ -1,5 +1,5 @@
 from flask import Blueprint
-from flask import render_template, request, jsonify, session, current_app
+from flask import render_template, request, jsonify, session, current_app, g
 import chess
 import random
 from models import Game, db
@@ -7,10 +7,11 @@ from datetime import datetime
 from game.services import GameService
 from ai import choose_ai_move, material_score, evaluate_board
 from helpers import explain_illegal_move, get_active_game_or_abort, get_ai_record, get_game_state, get_or_create_player_uuid, init_game, state_response
-
-import logging
-logger = logging.getLogger(__name__)
 import uuid
+import logging
+
+logger = logging.getLogger(__name__)
+
 
 game_bp = Blueprint("game", __name__)
 
@@ -19,10 +20,12 @@ game_bp = Blueprint("game", __name__)
 # -------------------------------------------------------------------
 
 @game_bp.before_request
-def track_activity():
+def attach_request_context():
+    g.request_id = uuid.uuid4().hex[:8]
+
     if request.endpoint != "static":
-                session["last_activity"] = datetime.utcnow().isoformat()
-                session.modified = True
+        session["last_activity"] = datetime.utcnow().isoformat()
+        session.modified = True
 
 @game_bp.route("/")
 def home():
