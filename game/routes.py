@@ -1,3 +1,4 @@
+import time
 from flask import Blueprint
 from flask import render_template, request, jsonify, session, current_app, g
 import chess
@@ -22,10 +23,27 @@ game_bp = Blueprint("game", __name__)
 @game_bp.before_request
 def attach_request_context():
     g.request_id = uuid.uuid4().hex[:8]
+    g.start_time = time.perf_counter()
 
     if request.endpoint != "static":
         session["last_activity"] = datetime.utcnow().isoformat()
         session.modified = True
+
+@game_bp.after_request
+def log_request_completion(response):
+    if hasattr(g, "start_time"):
+        duration_ms = round((time.perf_counter() - g.start_time) * 1000, 2)
+
+        logger.info(
+            "Request completed | method=%s | path=%s | status=%s | duration_ms=%s",
+            request.method,
+            request.path,
+            response.status_code,
+            duration_ms
+        )
+
+    return response
+
 
 @game_bp.route("/")
 def home():
