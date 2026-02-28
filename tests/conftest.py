@@ -7,10 +7,13 @@ import time
 from pathlib import Path
 
 import pytest
+from sqlalchemy import inspect
 from flask_migrate import upgrade
 
 from app import create_app
 from config import TestingConfig
+from extensions import db
+from models import Game, GameMove
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -21,6 +24,12 @@ def setup_test_db():
         uri = app.config["SQLALCHEMY_DATABASE_URI"]
         assert "test" in uri, f"Refusing to migrate non-test DB: {uri}"
         upgrade()
+        # Some local/dev DB states can retain alembic_version while application
+        # tables are missing. Ensure required tables exist for test startup.
+        existing_tables = set(inspect(db.engine).get_table_names())
+        required_tables = {"game", "game_moves"}
+        if not required_tables.issubset(existing_tables):
+            db.create_all()
 
     yield
 
