@@ -3,3 +3,4 @@ pytest
 playwright
 pytest-playwright
 pytest-base-url
+pip-tools

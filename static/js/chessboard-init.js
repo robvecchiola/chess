@@ -466,16 +466,20 @@ $(document).ready(function () {
         aiInFlight = true;
         board.draggable = false;
 
-        $.post("/ai-move", function (aiResponse) {
-            aiInFlight = false;
-            if (isGameOver) return;
-            updateFromState(aiResponse);
-        }).fail(function () {
-            if (isGameOver) return;
-            aiInFlight = false;
-            board.draggable = true;
-            updateErrorMessage("AI move failed.");
-        });
+        // Defer AI request one tick so the preceding /move session write
+        // is fully committed before the next request reads state.
+        window.setTimeout(() => {
+            $.post("/ai-move", function (aiResponse) {
+                aiInFlight = false;
+                if (isGameOver) return;
+                updateFromState(aiResponse);
+            }).fail(function () {
+                if (isGameOver) return;
+                aiInFlight = false;
+                board.draggable = true;
+                updateErrorMessage("AI move failed.");
+            });
+        }, 50);
     }
 
 

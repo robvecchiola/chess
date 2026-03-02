@@ -10,6 +10,8 @@ alembic==1.18.4
     #   flask-migrate
 blinker==1.9.0
     # via flask
+build==1.4.0
+    # via pip-tools
 cachelib==0.13.0
     # via flask-session
 certifi==2026.1.4
@@ -21,9 +23,12 @@ charset-normalizer==3.4.4
 chess==1.11.2
     # via python-chess
 click==8.3.1
-    # via flask
+    # via
+    #   flask
+    #   pip-tools
 colorama==0.4.6
     # via
+    #   build
     #   click
     #   pytest
 cryptography==46.0.5
@@ -65,7 +70,12 @@ markupsafe==3.0.3
 msgspec==0.20.0
     # via flask-session
 packaging==26.0
-    # via pytest
+    # via
+    #   build
+    #   pytest
+    #   wheel
+pip-tools==7.5.3
+    # via -r requirements-dev.in
 playwright==1.58.0
     # via
     #   -r requirements-dev.in
@@ -80,6 +90,10 @@ pygments==2.19.2
     # via pytest
 pymysql==1.1.2
     # via -r requirements.in
+pyproject-hooks==1.2.0
+    # via
+    #   build
+    #   pip-tools
 pytest==9.0.2
     # via
     #   -r requirements-dev.in
@@ -101,7 +115,7 @@ requests==2.32.5
     # via
     #   -r requirements.in
     #   pytest-base-url
-sqlalchemy==2.0.46
+sqlalchemy==2.0.47
     # via
     #   -r requirements.in
     #   alembic
@@ -117,3 +131,9 @@ urllib3==2.6.3
     # via requests
 werkzeug==3.1.6
     # via flask
+wheel==0.46.3
+    # via pip-tools
+
+# The following packages are considered to be unsafe in a requirements file:
+# pip
+# setuptools

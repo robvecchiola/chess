@@ -289,7 +289,7 @@ def test_ai_responds_with_legal_move(page: Page, live_server):
     current_fen = page.evaluate("window.CHESS_CONFIG.fen")
 
     # Play 5 white moves chosen from the current legal move list and verify AI replies each turn.
-    for _ in range(5):
+    for idx in range(5):
         assert_turn(page, "white", timeout=15000)
 
         board = chess.Board(current_fen)
@@ -312,9 +312,18 @@ def test_ai_responds_with_legal_move(page: Page, live_server):
 
         assert move_result.get("status") in {"ok", "game_over"}, f"Unexpected /move response: {move_result}"
         assert ai_result.get("status") in {"ok", "game_over"}, f"Unexpected /ai-move response: {ai_result}"
+        assert len(ai_result.get("move_history", [])) >= len(move_result.get("move_history", [])), (
+            f"AI response history regressed. move={move_result} ai={ai_result}"
+        )
+        if not ai_result.get("game_over"):
+            assert ai_result.get("turn") == "white", f"Expected AI response to hand turn back to white: {ai_result}"
+            assert len(ai_result.get("move_history", [])) == len(move_result.get("move_history", [])) + 1, (
+                f"Expected exactly one AI move appended. move={move_result} ai={ai_result}"
+            )
 
         current_fen = ai_result["fen"]
-        assert_turn(page, "white", timeout=15000)
+        if idx < 4 and not ai_result.get("game_over"):
+            assert_turn(page, "white", timeout=15000)
 
 
 # =============================================================================
@@ -922,22 +931,34 @@ def test_material_and_evaluation_persist_across_moves(page: Page, live_server):
     
     material_elem = page.locator("#material-advantage")
     eval_elem = page.locator("#position-eval")
-    
-    # Make several moves
-    moves = [
-        ("e2", "e4"),
-        ("d2", "d4"),  # After AI responds
-        ("g1", "f3"),  # After AI responds
-    ]
-    
-    for from_sq, to_sq in moves:
-        from_piece = page.locator(f'[data-square="{from_sq}"] img')
-        if from_piece.count() > 0:
-            move_result, ai_result = send_move_and_wait_for_ai(page, from_sq, to_sq)
-            assert move_result["status"] in {"ok", "game_over"} and ai_result["status"] in {"ok", "game_over"}
 
-            expect(material_elem).to_be_visible()
-            expect(eval_elem).to_be_visible()
+    current_fen = page.evaluate("window.CHESS_CONFIG.fen")
+
+    # Make several deterministic legal white moves and verify indicators persist.
+    for _ in range(3):
+        board = chess.Board(current_fen)
+        legal_moves = sorted(m.uci() for m in board.legal_moves)
+        assert legal_moves, f"Expected at least one legal move for FEN: {current_fen}"
+
+        selected_uci = legal_moves[0]
+        from_sq = selected_uci[:2]
+        to_sq = selected_uci[2:4]
+        promotion = selected_uci[4] if len(selected_uci) > 4 else None
+
+        move_result, ai_result = send_move_and_wait_for_ai(
+            page,
+            from_sq,
+            to_sq,
+            promotion=promotion,
+        )
+        assert move_result["status"] in {"ok", "game_over"} and ai_result["status"] in {"ok", "game_over"}
+
+        expect(material_elem).to_be_visible()
+        expect(eval_elem).to_be_visible()
+
+        current_fen = ai_result["fen"]
+        if ai_result.get("game_over"):
+            break
 
 
 def test_reset_clears_material_and_evaluation(page: Page, live_server):

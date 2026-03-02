@@ -1,7 +1,7 @@
 import re
 
 from flask import json
-from playwright.sync_api import Page, expect
+from playwright.sync_api import Page, expect, TimeoutError as PlaywrightTimeoutError
 
 
 def wait_for_board_ready(page: Page, timeout: int = 10000):
@@ -225,18 +225,29 @@ def send_move_and_wait_for_ai(
     ai_timeout: int = 15000,
 ):
     """Submit a legal move and wait for both /move and /ai-move responses."""
-    with page.expect_response(
-        lambda resp: "/ai-move" in resp.url and resp.request.method == "POST",
-        timeout=ai_timeout,
-    ) as ai_response_info:
-        move_result = send_move(
-            page,
-            from_square,
-            to_square,
-            promotion=promotion,
-            timeout=move_timeout,
-        )
-    return move_result, ai_response_info.value.json()
+    move_result = None
+    try:
+        with page.expect_response(
+            lambda resp: "/ai-move" in resp.url and resp.request.method == "POST",
+            timeout=ai_timeout,
+        ) as ai_response_info:
+            move_result = send_move(
+                page,
+                from_square,
+                to_square,
+                promotion=promotion,
+                timeout=move_timeout,
+            )
+        ai_result = ai_response_info.value.json()
+    except PlaywrightTimeoutError as exc:
+        status_text = page.locator("#game-status").text_content()
+        error_text = page.locator("#error-message").text_content()
+        raise AssertionError(
+            f"Timed out waiting for /ai-move after {from_square}->{to_square}. "
+            f"/move={move_result} | game-status={status_text!r} | error={error_text!r}"
+        ) from exc
+    _wait_for_ai_cycle_to_settle(page, ai_result, timeout=ai_timeout)
+    return move_result, ai_result
 
 
 def drag_move(page: Page, from_square: str, to_square: str, timeout: int = 10000):
@@ -265,7 +276,25 @@ def drag_move_and_wait_for_ai(
         timeout=ai_timeout,
     ) as ai_response_info:
         move_result = drag_move(page, from_square, to_square, timeout=move_timeout)
-    return move_result, ai_response_info.value.json()
+    ai_result = ai_response_info.value.json()
+    _wait_for_ai_cycle_to_settle(page, ai_result, timeout=ai_timeout)
+    return move_result, ai_result
+
+
+def _wait_for_ai_cycle_to_settle(page: Page, ai_result: dict, timeout: int = 15000):
+    """
+    Wait for frontend state sync after /ai-move.
+
+    The response can arrive before the JS callback finishes updating local
+    flags/UI, so a follow-up move may start too early.
+    """
+    if ai_result.get("game_over") or ai_result.get("status") == "game_over":
+        return
+
+    page.wait_for_function(
+        "() => window.board && window.board.draggable === true",
+        timeout=timeout,
+    )
 
 
 def drag_piece(page: Page, from_square: str, to_square: str, wait_ms: int = 3000):
