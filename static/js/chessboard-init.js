@@ -80,6 +80,14 @@ $(document).ready(function () {
     // 3. UI RENDERING FUNCTIONS (DOM Updates Only)
     // =====================================================
 
+    function resetMobileSelection() {
+        selectedSquare = null;
+
+        document.querySelectorAll("[data-square]").forEach(el => {
+            el.style.background = "";
+        });
+    }
+
     function updateErrorMessage(message) {
         $("#error-message").text(message);
     }
@@ -357,6 +365,8 @@ $(document).ready(function () {
 
     function updateFromState(state) {
         if (!state) return;
+
+        resetMobileSelection();
 
         pendingPromotion = null;
         updateErrorMessage("");
