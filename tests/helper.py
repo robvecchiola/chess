@@ -2,6 +2,7 @@ import re
 
 from flask import json
 from playwright.sync_api import Page, expect, TimeoutError as PlaywrightTimeoutError
+from urllib.parse import urlparse
 
 
 def wait_for_board_ready(page: Page, timeout: int = 10000):
@@ -17,6 +18,68 @@ def wait_for_board_ready(page: Page, timeout: int = 10000):
             return board.querySelectorAll('[data-square]').length >= 64;
         }
         """,
+        timeout=timeout,
+    )
+
+
+def _matches_post_path(resp, expected_path: str) -> bool:
+    """Match POST responses by exact path (avoid /move matching /ai-move)."""
+    if resp.request.method != "POST":
+        return False
+
+    parsed_path = urlparse(resp.url).path.rstrip("/") or "/"
+    target_path = expected_path.rstrip("/") or "/"
+    return parsed_path == target_path
+
+
+def _wait_for_animation_idle(page: Page, timeout: int = 10000):
+    """
+    Wait for chessboard.js temporary animation pieces to clear from <body>.
+
+    During board.position() animations, transient piece images are appended to
+    body, and dragging in that window is flaky.
+    """
+    page.wait_for_function(
+        """
+        () => {
+            const bodyPieces = Array.from(document.querySelectorAll("body > img[data-piece]"));
+            const visibleBodyPieces = bodyPieces.filter((img) => {
+                const style = window.getComputedStyle(img);
+                return style.display !== "none" && style.visibility !== "hidden";
+            });
+            return visibleBodyPieces.length === 0;
+        }
+        """,
+        timeout=timeout,
+    )
+
+
+def _wait_for_human_move_ready(page: Page, from_square: str, timeout: int = 10000):
+    """Wait until UI indicates the human side can make a stable drag/drop move."""
+    page.wait_for_function(
+        """
+        (sourceSquare) => {
+            const board = window.board;
+            if (!board || board.draggable !== true) return false;
+
+            const state = window.CHESS_CONFIG || {};
+            if (state.game_over) return false;
+            if (state.turn && state.turn !== "white") return false;
+
+            const bodyPieces = Array.from(document.querySelectorAll("body > img[data-piece]"));
+            const hasVisibleBodyPiece = bodyPieces.some((img) => {
+                const style = window.getComputedStyle(img);
+                return style.display !== "none" && style.visibility !== "hidden";
+            });
+            if (hasVisibleBodyPiece) return false;
+
+            const sourcePiece = document.querySelector(`[data-square="${sourceSquare}"] img`);
+            if (!sourcePiece) return false;
+            const style = window.getComputedStyle(sourcePiece);
+            return style && style.display !== "none" && style.visibility !== "hidden";
+        }
+        """,
+        arg=from_square,
         timeout=timeout,
     )
 
@@ -205,8 +268,9 @@ def send_move(
     timeout: int = 10000,
 ):
     """Submit a move through sendMove() and wait for /move response."""
+    _wait_for_human_move_ready(page, from_square, timeout=timeout)
     with page.expect_response(
-        lambda resp: "/move" in resp.url and resp.request.method == "POST",
+        lambda resp: _matches_post_path(resp, "/move"),
         timeout=timeout,
     ) as move_response_info:
         page.evaluate(
@@ -228,7 +292,7 @@ def send_move_and_wait_for_ai(
     move_result = None
     try:
         with page.expect_response(
-            lambda resp: "/ai-move" in resp.url and resp.request.method == "POST",
+            lambda resp: _matches_post_path(resp, "/ai-move"),
             timeout=ai_timeout,
         ) as ai_response_info:
             move_result = send_move(
@@ -252,11 +316,16 @@ def send_move_and_wait_for_ai(
 
 def drag_move(page: Page, from_square: str, to_square: str, timeout: int = 10000):
     """Drag a piece and wait for the /move response."""
+    _wait_for_human_move_ready(page, from_square, timeout=timeout)
+    _wait_for_animation_idle(page, timeout=timeout)
+
     from_piece = get_piece_in_square(page, from_square)
     to_square_elem = page.locator(f'[data-square="{to_square}"]')
+    expect(from_piece.first).to_be_visible(timeout=timeout)
+    expect(to_square_elem).to_be_visible(timeout=timeout)
 
     with page.expect_response(
-        lambda resp: "/move" in resp.url and resp.request.method == "POST",
+        lambda resp: _matches_post_path(resp, "/move"),
         timeout=timeout,
     ) as move_response_info:
         from_piece.first.drag_to(to_square_elem)
@@ -271,12 +340,31 @@ def drag_move_and_wait_for_ai(
     ai_timeout: int = 15000,
 ):
     """Drag a legal move and wait for both /move and /ai-move responses."""
-    with page.expect_response(
-        lambda resp: "/ai-move" in resp.url and resp.request.method == "POST",
-        timeout=ai_timeout,
-    ) as ai_response_info:
-        move_result = drag_move(page, from_square, to_square, timeout=move_timeout)
-    ai_result = ai_response_info.value.json()
+    move_result = None
+    try:
+        with page.expect_response(
+            lambda resp: _matches_post_path(resp, "/ai-move"),
+            timeout=ai_timeout,
+        ) as ai_response_info:
+            move_result = drag_move(page, from_square, to_square, timeout=move_timeout)
+        ai_result = ai_response_info.value.json()
+    except PlaywrightTimeoutError as exc:
+        status_text = page.locator("#game-status").text_content()
+        error_text = page.locator("#error-message").text_content()
+        debug_state = page.evaluate(
+            """
+            () => ({
+                fen: window.CHESS_CONFIG?.fen,
+                turn: window.CHESS_CONFIG?.turn,
+                boardDraggable: window.board?.draggable,
+            })
+            """
+        )
+        raise AssertionError(
+            f"Timed out waiting for /ai-move after drag {from_square}->{to_square}. "
+            f"/move={move_result} | game-status={status_text!r} | error={error_text!r} "
+            f"| state={debug_state}"
+        ) from exc
     _wait_for_ai_cycle_to_settle(page, ai_result, timeout=ai_timeout)
     return move_result, ai_result
 
@@ -291,8 +379,32 @@ def _wait_for_ai_cycle_to_settle(page: Page, ai_result: dict, timeout: int = 150
     if ai_result.get("game_over") or ai_result.get("status") == "game_over":
         return
 
+    expected_board_fen = None
+    if ai_result.get("fen"):
+        expected_board_fen = ai_result["fen"].split(" ")[0]
+
     page.wait_for_function(
-        "() => window.board && window.board.draggable === true",
+        """
+        ({boardFen}) => {
+            const board = window.board;
+            if (!board || board.draggable !== true) return false;
+
+            const bodyPieces = Array.from(document.querySelectorAll("body > img[data-piece]"));
+            const hasVisibleBodyPiece = bodyPieces.some((img) => {
+                const style = window.getComputedStyle(img);
+                return style.display !== "none" && style.visibility !== "hidden";
+            });
+            if (hasVisibleBodyPiece) return false;
+
+            if (boardFen) {
+                if (typeof board.position !== "function") return false;
+                const currentBoardFen = board.position("fen");
+                if (!currentBoardFen || currentBoardFen !== boardFen) return false;
+            }
+            return true;
+        }
+        """,
+        arg={"boardFen": expected_board_fen},
         timeout=timeout,
     )
 
