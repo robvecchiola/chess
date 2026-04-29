@@ -8,4 +8,4 @@ python-chess
 PyMySQL
 python-slugify
 requests>=2.33.1
-cryptography>=46.0.6 
+cryptography>=46.0.7 
