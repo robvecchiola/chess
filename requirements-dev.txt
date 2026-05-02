@@ -83,7 +83,7 @@ pyee==13.0.1
     # via playwright
 pygments==2.19.2
     # via pytest
-pymysql==1.1.2
+pymysql==1.1.3
     # via -r requirements.in
 pyproject-hooks==1.2.0
     # via
