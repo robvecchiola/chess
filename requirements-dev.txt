@@ -106,7 +106,7 @@ python-slugify==8.0.4
     # via
     #   -r requirements.in
     #   pytest-playwright
-requests==2.33.1
+requests==2.34.2
     # via
     #   -r requirements.in
     #   pytest-base-url
