@@ -98,7 +98,7 @@ pytest-base-url==2.1.0
     # via
     #   -r requirements-dev.in
     #   pytest-playwright
-pytest-playwright==0.7.2
+pytest-playwright==0.8.0
     # via -r requirements-dev.in
 python-chess==1.999
     # via -r requirements.in
