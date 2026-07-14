@@ -110,7 +110,7 @@ requests==2.34.2
     # via
     #   -r requirements.in
     #   pytest-base-url
-sqlalchemy==2.0.50
+sqlalchemy==2.0.51
     # via
     #   -r requirements.in
     #   alembic
