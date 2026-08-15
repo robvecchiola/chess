@@ -2,7 +2,7 @@ Flask
 Flask-Session
 Flask-SQLAlchemy
 Flask-Migrate
-SQLAlchemy>=2.0.51
+SQLAlchemy>=2.0.52
 alembic
 python-chess
 PyMySQL
