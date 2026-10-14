@@ -2,10 +2,10 @@ Flask
 Flask-Session
 Flask-SQLAlchemy
 Flask-Migrate
-SQLAlchemy>=2.0.49
+SQLAlchemy>=2.1.3
 alembic
 python-chess
 PyMySQL
 python-slugify
-requests>=2.33.1
-cryptography>=46.0.6 
+cryptography>=50.0.1 
+requests>=2.34.2
