@@ -120,7 +120,7 @@ typing-extensions==4.15.0
     #   sqlalchemy
 urllib3==2.8.0
     # via requests
-werkzeug==3.1.6
+werkzeug==3.1.9
     # via flask
 wheel==0.46.3
     # via pip-tools
