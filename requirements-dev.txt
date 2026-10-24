@@ -98,7 +98,7 @@ pytest-playwright==0.10.0
     # via -r requirements-dev.in
 python-chess==1.999
     # via -r requirements.in
-python-slugify==8.0.4
+python-slugify==9.1.3
     # via
     #   -r requirements.in
     #   pytest-playwright
