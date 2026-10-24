@@ -64,7 +64,7 @@ python-slugify==8.0.4
     # via -r requirements.in
 requests==2.34.2
     # via -r requirements.in
-sqlalchemy==2.1.4
+sqlalchemy==2.1.5
     # via
     #   -r requirements.in
     #   alembic
