@@ -14,7 +14,7 @@ build==1.4.0
     # via pip-tools
 cachelib==0.13.0
     # via flask-session
-certifi==2026.1.4
+certifi==2026.10.19
     # via requests
 cffi==2.0.0
     # via cryptography
