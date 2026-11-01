@@ -106,7 +106,7 @@ requests==2.34.2
     # via
     #   -r requirements.in
     #   pytest-base-url
-sqlalchemy==2.1.5
+sqlalchemy==2.1.6
     # via
     #   -r requirements.in
     #   alembic
