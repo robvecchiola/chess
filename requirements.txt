@@ -56,7 +56,7 @@ msgspec==0.20.0
     # via flask-session
 pycparser==3.0
     # via cffi
-pymysql==1.2.3
+pymysql==1.2.4
     # via -r requirements.in
 python-chess==1.999
     # via -r requirements.in
